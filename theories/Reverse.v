@@ -15,8 +15,7 @@ Require Import Equations.
 
 Section Reverse.
 
-Generalizable Variables A.
-Variable (A : Type).
+Context {A : Type}.
 
 Fixpoint reverse (r : @LRegex A) : LRegex  :=
   match r with
@@ -80,8 +79,8 @@ Proof.
   rewrite match_concat_iff in H.
   destruct H as [d1 [d2 [H1 [H2 H3]]]].
   rewrite match_concat_iff.
-  pose proof (match_length _ _ _ _ _ H1) as Hlen1.
-  pose proof (match_length _ _ _ _ _ H2) as Hlen2.
+  pose proof (match_length _ _ _ _ H1) as Hlen1.
+  pose proof (match_length _ _ _ _ H2) as Hlen2.
   apply IHr1 in H1. apply IHr2 in H2.
   exists d2, d1.
   subst.
@@ -95,8 +94,8 @@ Proof.
   rewrite match_concat_iff in H.
   destruct H as [d1 [d2 [H1 [H2 H3]]]].
   rewrite match_concat_iff.
-  pose proof (match_length _ _ _ _ _ H1) as Hlen1.
-  pose proof (match_length _ _ _ _ _ H2) as Hlen2.
+  pose proof (match_length _ _ _ _ H1) as Hlen1.
+  pose proof (match_length _ _ _ _ H2) as Hlen2.
   apply IHr2 in H1. apply IHr1 in H2.
   exists d2, d1.
   subst.
@@ -121,8 +120,8 @@ Proof.
   induction H; try discriminate.
     + apply match_star_eps.
     +
-    pose proof (match_length _ _ _ _ _ H) as Hlen1.
-    pose proof (match_length _ _ _ _ _ H0) as Hlen2.
+    pose proof (match_length _ _ _ _ H) as Hlen1.
+    pose proof (match_length _ _ _ _ H0) as Hlen2.
     inversion Heqe. subst.
     specialize (IHmatch_regex2 ltac:(lia) ltac:(reflexivity)).
     clear IHmatch_regex1.
@@ -140,8 +139,8 @@ Proof.
     induction H; try discriminate.
     + apply match_star_eps.
     + subst.
-    pose proof (match_length _ _ _ _ _ H) as Hlen1.
-    pose proof (match_length _ _ _ _ _ H0) as Hlen2.
+    pose proof (match_length _ _ _ _ H) as Hlen1.
+    pose proof (match_length _ _ _ _ H0) as Hlen2.
     inversion Heqe. subst.
     specialize (IHmatch_regex2 ltac:(lia) ltac:(reflexivity)).
     clear IHmatch_regex1.
@@ -164,13 +163,13 @@ Proof.
     subst. simpl in H1.
     replace (start + 0) with start by lia.
     rewrite rev_length.
-    pose proof (match_length _ _ _ _ _ H1) as Hlen1.
+    pose proof (match_length _ _ _ _ H1) as Hlen1.
     rewrite rev_length in Hlen1.
     replace (length w - (length w - start)) with start by lia.
     auto. lia.
   - rewrite match_lookbehind_iff. rewrite match_lookahead_iff.
     intro Hlen. intros [H1 H2].
-    pose proof (match_length _ _ _ _ _ H1) as Hlen1.
+    pose proof (match_length _ _ _ _ H1) as Hlen1.
     apply IHr in H1.
     subst. replace ((length w - (start + (length w - start))) ) with 0 in H1 by lia.
     replace (start + 0) with start by lia. simpl in H1.
@@ -260,5 +259,3 @@ Proof.
 Qed.
     
 End Reverse.
-
-Arguments reverse {A}.

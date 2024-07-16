@@ -29,8 +29,7 @@ Require Import Equations.
 
 Section Layerwise.
 
-Generalizable Variables A.
-Variable (A : Type).
+Context {A : Type}.
 
 Fixpoint absEvalAux (scanMatch : @ORegex A -> @ostring A -> tape) (w wrev : list A) (len : nat) (r : @LRegex A) (i : nat) (ts : list tape) :
   @ORegex A * nat * list tape :=
@@ -796,7 +795,7 @@ Lemma oscanMatcher_is_oscanMatcher :
 Proof.
   unfold is_oscanMatcher. intros.
   unfold is_otape.
-  pose proof (cScanMatch_tape A r os).
+  pose proof (cScanMatch_tape r os).
   firstorder.
 Qed.
 
@@ -829,7 +828,7 @@ Lemma rPass_abstract_rl (r : @LRegex A) (w : list A) (vs : list valuation) :
   -> is_oval r w vs
   -> forall n,
   n <= length w
-  -> match_oregex (rPass _ (abstract r)) (ofirstn n (w, vs))
+  -> match_oregex (rPass (abstract r)) (ofirstn n (w, vs))
   <-> exists m, 
     m <= n
     /\ match_regex r w m (n - m).
@@ -871,7 +870,7 @@ Proof.
   2 : { apply ofirstn_outer_length_wf. auto. }
   rewrite <- oreverse_match_iff in M.
   2 : { apply oskipn_outer_length_wf. apply ofirstn_outer_length_wf. auto. }
-  apply <- oracle_compose_aux.
+  apply <- (@oracle_compose_aux A).
   2 : lia.
   2 : apply Hoval.
   assert (olength (ofirstn n (w, vs)) = n) as Hlen. {
@@ -903,7 +902,7 @@ Lemma reverse_pass_match_ll (r : @LRegex A) (w : list A) (vs : list valuation) :
   -> is_oval r w vs
   -> forall n,
   n <= length w
-  -> match_oregex (rPass _ (oreverse (abstract r))) (ofirstn n (orev (w, vs)))
+  -> match_oregex (rPass (oreverse (abstract r))) (ofirstn n (orev (w, vs)))
   <-> exists d, d <= n /\ match_regex r w (length w - n) d.
 Proof.
   intros Hwf Hoval n Hn.
@@ -945,7 +944,7 @@ Definition llmatch (r : @LRegex A) (w : list A) : option (nat * nat) :=
   (* abstraction *)
   let (or, vs) := absEval (@cScanMatch A) w r in
   (* reverse pass *)
-  let bw_tape := cScanMatch _ (rPass _ (oreverse or)) (orev (w, vs)) in
+  let bw_tape := cScanMatch (rPass (oreverse or)) (orev (w, vs)) in
   (* left-end point *)
   let lendO := find_largest_true bw_tape in
   match lendO with
@@ -953,7 +952,7 @@ Definition llmatch (r : @LRegex A) (w : list A) : option (nat * nat) :=
   | Some lend' =>
   let lend := length w - lend' in
   (* forward pass *)
-  let fw_tape := cScanMatch _ or (oskipn lend (w, vs)) in
+  let fw_tape := cScanMatch or (oskipn lend (w, vs)) in
   (* maximum length *)
   let d := find_largest_true fw_tape in
   match d with
@@ -967,7 +966,7 @@ Lemma reverse_pass_Some (r : @LRegex A) (or : ORegex) (w : list A) (vs : list va
   -> is_oval r w vs
   -> or = abstract r
   -> forall lend',
-      find_largest_true (cScanMatch A (rPass A (oreverse or)) (orev (w, vs))) = Some lend'
+      find_largest_true (cScanMatch (rPass (oreverse or)) (orev (w, vs))) = Some lend'
   <-> ((exists d, lend' <= length w /\ (length w - lend') + d <= length w /\ match_regex r w (length w - lend') d)
    /\  (forall lend_more_left, lend_more_left < length w - lend' ->
        ~ (exists d, lend_more_left + d <= length w /\ match_regex r w lend_more_left d))).
@@ -976,7 +975,7 @@ Proof.
   rewrite find_largest_true_Some.
   assert (outer_length_wf (orev (w, vs))) as Hwf' by
     now apply orev_outer_length_wf.
-  pose proof (cScanMatch_tape A (rPass A (oreverse or)) (orev (w, vs)) Hwf') as [Hlen Htape].
+  pose proof (cScanMatch_tape (rPass (oreverse or)) (orev (w, vs)) Hwf') as [Hlen Htape].
   rewrite orev_olength in Hlen. unfold olength in Hlen. simpl length at 2 in Hlen.
   rewrite Hlen.
   split.
@@ -1038,7 +1037,7 @@ Lemma reverse_pass_None (r : @LRegex A) (or : ORegex) (w : list A) (vs : list va
   outer_length_wf (w, vs)
   -> is_oval r w vs
   -> or = abstract r
-  -> find_largest_true (cScanMatch A (rPass A (oreverse or)) (orev (w, vs))) = None
+  -> find_largest_true (cScanMatch (rPass (oreverse or)) (orev (w, vs))) = None
   <-> (forall lend d, 
     lend <= lend + d <= length w
     -> ~ match_regex r w lend d).
@@ -1047,7 +1046,7 @@ Proof.
   rewrite find_largest_true_None.
   assert (outer_length_wf (orev (w, vs))) as Hwf' by
     now apply orev_outer_length_wf.
-  pose proof (cScanMatch_tape A (rPass A (oreverse or)) (orev (w, vs)) Hwf') as [Hlen Htape].
+  pose proof (cScanMatch_tape (rPass (oreverse or)) (orev (w, vs)) Hwf') as [Hlen Htape].
   rewrite orev_olength in Hlen. unfold olength in Hlen. simpl length at 2 in Hlen.
   rewrite orev_olength in Htape. unfold olength in Htape. simpl length in Htape.
   split.
@@ -1086,7 +1085,7 @@ Lemma forward_pass_Some (r : @LRegex A) (or : ORegex) (w : list A) (vs : list va
   -> or = abstract r
   -> forall lend d,
       lend <= length w
-  -> find_largest_true (cScanMatch A or (oskipn lend (w, vs))) = Some d
+  -> find_largest_true (cScanMatch or (oskipn lend (w, vs))) = Some d
   <-> match_regex r w lend d
   /\ (forall d', d' > d -> lend + d' <= length w
       -> ~ match_regex r w lend d').
@@ -1095,7 +1094,7 @@ Proof.
   rewrite find_largest_true_Some.
   assert (outer_length_wf (oskipn lend (w, vs))) as Hwf' by
     now apply oskipn_outer_length_wf.
-  pose proof (cScanMatch_tape A or (oskipn lend (w, vs)) Hwf') as [Hlen Htape].
+  pose proof (cScanMatch_tape or (oskipn lend (w, vs)) Hwf') as [Hlen Htape].
   rewrite oskipn_olength in Hlen. unfold olength in Hlen. simpl length at 2 in Hlen.
   rewrite Hlen.
   rewrite oskipn_olength in Htape. unfold olength in Htape. simpl length in Htape.
@@ -1122,7 +1121,7 @@ Proof.
   rewrite <- Hd'2.
   now specialize (H2 d' Hd' ltac:(lia)).
   - intros [H1 H2].
-  specialize (match_length _ r w lend d H1) as L.
+  specialize (match_length r w lend d H1) as L.
   rewrite oracle_compose_aux in H1; eauto. 2 : lia.
   split.
   + specialize (Htape d ltac:(lia)) as [Hd1 Hd2].
@@ -1142,14 +1141,14 @@ Lemma forward_pass_None (r : @LRegex A) (or : ORegex) (w : list A) (vs : list va
   -> or = abstract r
   -> forall lend,
       lend <= length w
-  -> find_largest_true (cScanMatch A or (oskipn lend (w, vs))) = None
+  -> find_largest_true (cScanMatch or (oskipn lend (w, vs))) = None
   <-> (forall d, lend + d <= length w -> ~ match_regex r w lend d).
 Proof.
   intros Hwf Hoval Hor lend Hlend.
   rewrite find_largest_true_None.
   assert (outer_length_wf (oskipn lend (w, vs))) as Hwf' by
     now apply oskipn_outer_length_wf.
-  pose proof (cScanMatch_tape A or (oskipn lend (w, vs)) Hwf') as [Hlen Htape].
+  pose proof (cScanMatch_tape or (oskipn lend (w, vs)) Hwf') as [Hlen Htape].
   rewrite oskipn_olength in Hlen. unfold olength in Hlen. simpl length at 2 in Hlen.
   rewrite oskipn_olength in Htape. unfold olength in Htape. simpl length in Htape.
   split.
@@ -1157,7 +1156,7 @@ Proof.
   rewrite oracle_compose_aux. 2 : apply Hoval. 2 : apply Hd.
   subst or. unfold abstract in Htape.
   apply Htape. lia.
-  remember (cScanMatch _ _ _) as tape.
+  remember (cScanMatch _ _) as tape.
   assert (d < length tape) as Ht by lia.
   rewrite nth_error_Some_ex in Ht.
   destruct Ht as [x Hx]. rewrite Hx.
@@ -1189,7 +1188,7 @@ Proof.
   intros.
   unfold llmatch in H.
   destruct (absEval (@cScanMatch A) w r) as [or vs] eqn:HabsEval.
-  pose proof (absEval_spec (@cScanMatch A) w r (cScanMatch_tape _) or vs HabsEval) as [Ho Hoval].
+  pose proof (absEval_spec (@cScanMatch A) w r (cScanMatch_tape) or vs HabsEval) as [Ho Hoval].
   assert (outer_length_wf (w, vs)) as Hwf. {
     unfold is_oval in Hoval. unfold is_oval_aux in Hoval.
     destruct Hoval as [ts [Hts Hlen]].
@@ -1199,9 +1198,9 @@ Proof.
     destruct Hts as [Hlen' [Ht' Hspec]].
     specialize (Ht' t Ht). lia.
   }
-  destruct (find_largest_true (cScanMatch A (rPass A (oreverse or)) (orev (w, vs)))) as [ lend' | ] eqn:E1.
+  destruct (find_largest_true (cScanMatch (rPass (oreverse or)) (orev (w, vs)))) as [ lend' | ] eqn:E1.
   2 : discriminate.
-  destruct (find_largest_true (cScanMatch A or (oskipn (length w - lend') (w, vs)))) as [ d' | ] eqn:E2.
+  destruct (find_largest_true (cScanMatch or (oskipn (length w - lend') (w, vs)))) as [ d' | ] eqn:E2.
   2 : discriminate.
   rewrite reverse_pass_Some in E1; eauto.
   inversion H. subst n. subst d'. clear H.
@@ -1222,7 +1221,7 @@ Proof.
   intros.
   unfold llmatch in H.
   destruct (absEval (@cScanMatch A) w r) as [or vs] eqn:HabsEval.
-  pose proof (absEval_spec (@cScanMatch A) w r (cScanMatch_tape _) or vs HabsEval) as [Ho Hoval].
+  pose proof (absEval_spec (@cScanMatch A) w r cScanMatch_tape or vs HabsEval) as [Ho Hoval].
   assert (outer_length_wf (w, vs)) as Hwf. {
     unfold is_oval in Hoval. unfold is_oval_aux in Hoval.
     destruct Hoval as [ts [Hts Hlen]].
@@ -1232,12 +1231,12 @@ Proof.
     destruct Hts as [Hlen' [Ht' Hspec]].
     specialize (Ht' t Ht). lia.
   }
-  destruct (find_largest_true (cScanMatch A (rPass A (oreverse or)) (orev (w, vs)))) as [ lend' | ] eqn:E1.
+  destruct (find_largest_true (cScanMatch (rPass (oreverse or)) (orev (w, vs)))) as [ lend' | ] eqn:E1.
   2 : rewrite reverse_pass_None in E1; eauto.
   rewrite reverse_pass_Some in E1; eauto.
   destruct E1 as [E11 E12].
   destruct E11 as [d1 [Hd1 [Hd2 M]]].
-  destruct (find_largest_true (cScanMatch A or (oskipn (length w - lend') (w, vs)))) as [ d' | ] eqn:E2.
+  destruct (find_largest_true (cScanMatch or (oskipn (length w - lend') (w, vs)))) as [ d' | ] eqn:E2.
   1 : discriminate.
   rewrite forward_pass_None in E2; eauto. 2 : lia.
   specialize (E2 d1 ltac:(auto)). contradiction.

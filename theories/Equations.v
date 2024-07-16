@@ -33,8 +33,7 @@ Open Scope bool_scope.
 
 Section Equations.
 
-Generalizable Variables A.
-Variable (A : Type).
+Context {A : Type}.
 
 Lemma match_length : forall r (w : list A) start delta,
     match_regex r w start delta -> delta <= length w - start.
@@ -289,7 +288,7 @@ Lemma lookahead_neglookahead_inverse : forall (r : LRegex),
 Proof.
     unfold regex_eq. intros.
     rewrite match_union_iff.
-    pose proof match_lem _ r w start (length w - start) as [Hr | Hr];
+    pose proof match_lem r w start (length w - start) as [Hr | Hr];
         rewrite match_eps_iff;
         rewrite match_lookahead_iff;
         rewrite match_neglookahead_iff;
@@ -413,7 +412,7 @@ Lemma lookahead_neglookahead_eps (r : LRegex) :
 Proof.
     unfold regex_eq. intros.
     rewrite match_union_iff.
-    pose proof match_lem _ r w start (length w - start) as [Hr | Hr];
+    pose proof match_lem  r w start (length w - start) as [Hr | Hr];
         rewrite match_eps_iff;
         rewrite match_lookahead_iff;
         rewrite match_neglookahead_iff;
@@ -1173,23 +1172,3 @@ Proof.
 Qed.
 
 End Equations.
-
-Arguments wildcard {A}.
-Arguments regex_eq {A}.
-Arguments regex_exp {A}.
-Arguments regex_leq {A}.
-
-Hint Resolve regex_eq_sym regex_eq_refl regex_eq_trans regex_eq_equiv : regex.
-Hint Rewrite concat_eps_l concat_eps_r concat_assoc: regex.
-Hint Rewrite union_assoc union_comm union_idemp : regex.
-Hint Rewrite concat_distrib_union_l concat_distrib_union_r : regex.
-Hint Rewrite lookahead_comm lookahead_star_eps lookahead_distrib_union lookahead_neglookahead_inverse : regex.
-Hint Rewrite lookahead_flatten_wildcard lookahead_flatten lookahead_neglookahead_eps : regex.
-Hint Resolve lookahead_neglookahead_not_match : regex.
-Hint Rewrite lookahead_eps_eps : regex.
-Hint Resolve match_star_once match_star_app : regex.
-Hint Rewrite star_idemp : regex.
-Hint Resolve union_proper concat_proper star_proper : regex.
-Hint Resolve regex_leq_refl regex_leq_trans regex_leq_antisym regex_leq_preorder regex_leq_partialorder : regex.
-Hint Resolve subset_leq : regex. 
-Hint Rewrite kleene_1 kleene_2 kleene_3 kleene_3_alt star_expand_l star_expand_r : regex.

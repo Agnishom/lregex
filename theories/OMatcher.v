@@ -11,8 +11,7 @@ Require Import ORegex.
 
 Section OMatcher.
 
-Generalizable Variables A.
-Variable (A : Type).
+Context {A : Type}.
 
 Inductive MRegex : Type :=
 | MEpsilon : MRegex
@@ -3043,24 +3042,3 @@ Proof.
 Qed.
 
 End OMatcher.
-
-Arguments MRegex {A}.
-Arguments MEpsilon {A}.
-Arguments MCharClass {A}.
-Arguments MUnion {A}.
-Arguments MConcat {A}.
-Arguments MStar {A}.
-Arguments MQueryNeg {A}.
-Arguments MQueryPos {A}.
-Arguments match_mregex {A}.
-Arguments strip {A}.
-Arguments toMarked {A}.
-Arguments read {A}.
-Arguments nullableWith {A}.
-Arguments followWith {A}.
-Arguments finalWith {A}.
-Arguments oscanMatcher {A}.
-Arguments matcherStates {A}.
-Arguments matcherStatesAux {A}.
-Arguments consume {A}.
-Arguments consumeAux {A}.

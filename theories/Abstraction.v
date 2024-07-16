@@ -29,8 +29,7 @@ Require Import ListLemmas.
 
 Section Abstraction.
 
-Generalizable Variables A.
-Variable (A : Type).
+Context {A : Type}.
 
 Inductive LARegex :=
   | LALookAhead : (@LRegex A) -> LARegex
@@ -998,7 +997,7 @@ Proof.
         assert (@ij_error bool 𝛼 start ts = Some false). {
           unfold ij_error.
           unfold tape in Ht'. rewrite Ht'.
-          pose proof match_lem _ r w start (length w - start) as [Hlem1 | Hlem2].
+          pose proof match_lem r w start (length w - start) as [Hlem1 | Hlem2].
           - rewrite <- Hs2 in Hlem1. contradiction.
           - rewrite <- Hs3 in Hlem2. auto. 
         }
@@ -1085,7 +1084,7 @@ Proof.
         assert (@ij_error bool 𝛼 start ts = Some false). {
           unfold ij_error.
           unfold tape in Ht'. rewrite Ht'.
-          pose proof match_lem _ r w 0 start as [Hlem1 | Hlem2].
+          pose proof match_lem r w 0 start as [Hlem1 | Hlem2].
           - rewrite <- Hs2 in Hlem1. contradiction.
           - rewrite <- Hs3 in Hlem2. auto. 
         }
@@ -1144,15 +1143,3 @@ Proof.
 Qed.
 
 End Abstraction.
-
-Arguments LARegex {A}.
-Arguments maximal_lookarounds {A}.
-Arguments arity {A}.
-Arguments total_arity {A}.
-Arguments abstractAux {A}.
-Arguments abstract {A}.
-Arguments is_oval_aux {A}.
-Arguments is_oval {A}.
-Arguments is_lookaround_tape {A}.
-Arguments is_lookahead_tape {A}.
-Arguments is_lookbehind_tape {A}.

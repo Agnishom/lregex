@@ -12,8 +12,7 @@ Require Import OMatcher.
 
 Section CMRegex.
 
-Generalizable Variables A.
-Variable (A : Type).
+Context {A : Type}.
 
 Inductive CMRegex : Type :=
     | MkCMRegex : bool -> bool -> CMRe -> CMRegex

@@ -13,8 +13,7 @@ Require Import ORegex.
 
 Section OReverse.
 
-Generalizable Variables A.
-Variable (A : Type).
+Context {A : Type}.
 
 Fixpoint oreverse (r : @ORegex A) : ORegex  :=
   match r with
@@ -122,7 +121,7 @@ Proof.
       assert (n <= olength os \/ n > olength os) as Hn by lia.
       destruct Hn.
       * specialize (IHmatch_oregex2 ltac:(reflexivity)
-          (oskipn_outer_length_wf _ n os Hwf)).
+          (oskipn_outer_length_wf n os Hwf)).
         simpl in IHmatch_oregex2.
         clear IHmatch_oregex1.
         apply omatch_star_r with (n := (olength os - n)).
@@ -144,11 +143,11 @@ Proof.
            unfold orev. simpl. apply IHr.
            auto. auto.
            now apply orev_outer_length_wf.
-           pose proof (orev_olength A os). lia.
+           pose proof (orev_olength os). lia.
         ++ apply omatch_star_eps.
            rewrite oskipn_all2. unfold olength. auto.
            now apply orev_outer_length_wf.
-           pose proof (orev_olength A os). lia.
+           pose proof (orev_olength os). lia.
         ++ assumption.
         ++ lia.  
   - inversion H. subst.
@@ -195,5 +194,3 @@ Qed.
 
 
 End OReverse.
-
-Arguments oreverse {A}.

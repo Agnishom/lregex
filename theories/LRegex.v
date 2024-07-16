@@ -27,9 +27,7 @@ Open Scope regex_scope.
 
 Section Syntax.
 
-Generalizable Variables A.
-
-Variable (A : Type).
+Context {A : Type}.
 
 Inductive LRegex : Type :=
 | Epsilon : LRegex
@@ -44,17 +42,6 @@ Inductive LRegex : Type :=
 
 End Syntax.
 
-Arguments LRegex {A}.
-Arguments Epsilon {A}.
-Arguments CharClass {A}.
-Arguments Concat {A}.
-Arguments Union {A}.
-Arguments Star {A}.
-Arguments LookAhead {A}.
-Arguments LookBehind {A}.
-Arguments NegLookAhead {A}.
-Arguments NegLookBehind {A}.
-
 Definition ε {A : Type} := @Epsilon A.
 Infix "·" := Concat (at level 60, right associativity) : regex_scope.
 Infix "∪" := Union (at level 50, left associativity) : regex_scope.
@@ -67,9 +54,7 @@ Notation "(?<! r )" := (NegLookBehind r) (at level 40, no associativity) : regex
 
 Section Semantics.
 
-Generalizable Variables A.
-
-Variable (A : Type).
+Context {A : Type}.
 
 Inductive match_regex : LRegex -> list A -> nat -> nat -> Prop :=
 | match_epsilon : forall (w : list A) (start : nat), 
@@ -689,12 +674,6 @@ Qed.
 
 End Semantics.
 
-Arguments match_regex {A}.
-Arguments not_match_regex {A}.
-Arguments is_scanMatcher {A}.
-Arguments is_tape {A}.
-Arguments is_tape_slice {A}.
-
 Hint Constructors match_regex : regex.
 Hint Resolve match_eps_iff : regex.
 Hint Resolve match_class_iff : regex.
@@ -707,5 +686,3 @@ Hint Resolve match_neglookbehind_iff : regex.
 Hint Resolve match_star_iff match_star_nonempty : regex.
 Hint Resolve match_lem : regex.
 Hint Resolve scanMatcher_none : regex.
-Hint Rewrite match_not_match : regex.
-Hint Rewrite scanMatcher_length : regex.

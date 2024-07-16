@@ -23,8 +23,7 @@ Require Import ListLemmas.
 
 Section OString.
 
-Generalizable Variables A.
-Variable (A : Type).
+Context {A : Type}.
 
 Definition valuation : Type := list bool.
 Definition ostring : Type := (list A) * (list valuation).
@@ -742,23 +741,3 @@ Proof.
 Qed.
 
 End OString.
-
-Arguments ORegex {A}.
-Arguments OEpsilon {A}.
-Arguments OCharClass {A}.
-Arguments OConcat {A}.
-Arguments OUnion {A}.
-Arguments OStar {A}.
-Arguments OQueryPos {A}.
-Arguments OQueryNeg {A}.
-Arguments ostring {A}.
-Arguments olength {A}.
-Arguments orev {A}.
-Arguments ofirstn {A}.
-Arguments oskipn {A}.
-Arguments ofirstval {A}.
-Arguments olastval {A}.
-Arguments match_oregex {A}.
-Arguments outer_length_wf {A}.
-Arguments inner_length_wf {A}.
-Arguments ostring_wf {A}.
