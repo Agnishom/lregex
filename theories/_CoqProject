@@ -1,0 +1,12 @@
+-R . LRegex
+./ListLemmas.v
+./LRegex.v
+./Equations.v
+./ORegex.v
+./Reverse.v
+./OReverse.v
+./Abstraction.v
+./OMatcher.v
+./CMatcher.v
+./Layerwise.v
+./Extract.v
