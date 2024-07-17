@@ -70,6 +70,187 @@ Inductive match_mregex : MRegex -> ostring -> Prop :=
      -> match_mregex (MStar mr) os
 .
 
+Definition empty_oreg : ORegex :=
+    @OCharClass A (fun _ => false).
+
+Fixpoint markedLang (mr : MRegex) : ORegex :=
+  match mr with 
+  | MEpsilon => empty_oreg
+  | MCharClass true f => OCharClass f
+  | MCharClass false f => empty_oreg
+  | MQueryPos n => empty_oreg
+  | MQueryNeg n => empty_oreg
+  | MUnion mr1 mr2 => OUnion (markedLang mr1) (markedLang mr2)
+  | MConcat mr1 mr2 => OUnion (OConcat (markedLang mr1) (strip mr2)) (markedLang mr2)
+  | MStar mr => OConcat (markedLang mr) (OStar (strip mr))
+  end.
+
+Fixpoint nullableWith (v : valuation) (mr : MRegex) : bool :=
+  match mr with
+  | MEpsilon => true
+  | MCharClass _ _ => false
+  | MQueryPos n => 
+      match nth_error v n with
+      | Some true => true
+      | _ => false
+      end
+  | MQueryNeg n =>
+      match nth_error v n with
+      | Some false => true
+      | _ => false
+      end
+  | MConcat mr1 mr2 => 
+      nullableWith v mr1 && nullableWith v mr2
+  | MUnion mr1 mr2 =>
+      nullableWith v mr1 || nullableWith v mr2
+  | MStar _ => true
+  end.
+
+(* this refers to the idea that if a charclass is marked, 
+   then there must be some character that it matches
+*)
+Fixpoint no_spurious_marks (mr : MRegex) : Prop :=
+  match mr with
+  | MEpsilon => True
+  | MCharClass true p => exists a, p a = true
+  | MCharClass false _ => True
+  | MQueryPos _ => True
+  | MQueryNeg _ => True
+  | MConcat mr1 mr2 => no_spurious_marks mr1 /\ no_spurious_marks mr2
+  | MUnion mr1 mr2 => no_spurious_marks mr1 /\ no_spurious_marks mr2
+  | MStar mr => no_spurious_marks mr
+  end.
+
+Fixpoint finalWith (v : valuation) (mr : MRegex) : bool :=
+  match mr with
+  | MEpsilon => false
+  | MCharClass b p => b
+  | MQueryPos _ => false
+  | MQueryNeg _ => false
+  | MConcat mr1 mr2 => (finalWith v mr1 && nullableWith v mr2) || finalWith v mr2
+  | MUnion mr1 mr2 => finalWith v mr1 || finalWith v mr2
+  | MStar mr => finalWith v mr
+  end.
+
+Fixpoint read (a : A) (mr : MRegex) : MRegex :=
+  match mr with
+  | MEpsilon => MEpsilon
+  | MCharClass b p => MCharClass (b && p a) p
+  | MQueryPos n => MQueryPos n
+  | MQueryNeg n => MQueryNeg n
+  | MConcat mr1 mr2 => MConcat (read a mr1) (read a mr2)
+  | MUnion mr1 mr2 => MUnion (read a mr1) (read a mr2)
+  | MStar mr => MStar (read a mr)
+  end.
+
+Fixpoint initMarkWith (v : valuation) (mr : MRegex) : MRegex :=
+  match mr with
+  | MEpsilon => MEpsilon
+  | MCharClass _ p => MCharClass true p
+  | MQueryPos n => MQueryPos n
+  | MQueryNeg n => MQueryNeg n
+  | MUnion mr1 mr2 => MUnion (initMarkWith v mr1) (initMarkWith v mr2)
+  | MConcat mr1 mr2 => 
+      MConcat (initMarkWith v mr1) (
+        match nullableWith v mr1 with
+        | true => initMarkWith v mr2
+        | false => mr2
+        end)
+  | MStar mr => MStar (initMarkWith v mr)
+  end.
+
+Fixpoint shiftWith (v : valuation) (mr : MRegex) : MRegex :=
+  match mr with
+  | MEpsilon => MEpsilon
+  | MCharClass b p => MCharClass false p
+  | MQueryPos n => MQueryPos n
+  | MQueryNeg n => MQueryNeg n
+  | MUnion mr1 mr2 => MUnion (shiftWith v mr1) (shiftWith v mr2)
+  | MConcat mr1 mr2 => 
+      MConcat 
+        (shiftWith v mr1) 
+        (match finalWith v mr1 with
+        | true => initMarkWith v (shiftWith v mr2)
+        | false => shiftWith v mr2
+        end)
+  | MStar mr => MStar (
+      match finalWith v mr with
+      | true => initMarkWith v (shiftWith v mr)
+      | false => shiftWith v mr
+      end)
+  end.
+
+Fixpoint followWith (b : bool) (v : valuation) (mr : MRegex) : MRegex :=
+  match mr with
+  | MEpsilon => MEpsilon
+  | MCharClass _ p => MCharClass b p
+  | MQueryPos n => MQueryPos n
+  | MQueryNeg n => MQueryNeg n
+  | MUnion mr1 mr2 => MUnion (followWith b v mr1) (followWith b v mr2)
+  | MConcat mr1 mr2 =>
+      let b1 := (finalWith v mr1) || (b && (nullableWith v mr1)) in
+      MConcat (followWith b v mr1) (followWith b1 v mr2)
+  | MStar mr => MStar (followWith (b || (finalWith v mr)) v mr)
+  end.
+
+Fixpoint toMarked (or : @ORegex A) : MRegex :=
+  match or with
+  | OEpsilon => MEpsilon
+  | OCharClass p => MCharClass false p
+  | OQueryPos n => MQueryPos n
+  | OQueryNeg n => MQueryNeg n
+  | OUnion or1 or2 => MUnion (toMarked or1) (toMarked or2)
+  | OConcat or1 or2 => MConcat (toMarked or1) (toMarked or2)
+  | OStar or => MStar (toMarked or)
+  end.
+
+(* when using, we want |w| = |o| *)
+Fixpoint consumeAux (mr : MRegex) (w : list A) (o : list valuation) : MRegex :=
+  match (w, o) with
+  | ([], []) => mr
+  | ([], _ :: _) => MEpsilon (* shouldn't arise! *)
+  | (_ :: _, []) => MEpsilon (* shouldn't arise! *)
+  | (a0 :: w', v1 :: o') => 
+      let mNew := read a0 mr in
+      let mNew' := followWith false v1 mNew in
+          consumeAux mNew' w' o'
+  end.
+
+Definition consume (or : ORegex) (os : @ostring A) : MRegex :=
+  let mr := toMarked or in
+  match os with
+  | (_, []) => mr
+  | (w, o0 :: o') => consumeAux (followWith true o0 mr) w o'
+  end.
+
+(* when using this function, we will make sure that |w| = |o| *)
+Fixpoint matcherStatesAux (mr : MRegex) (w : list A) (o : list valuation) : list (bool * MRegex) :=
+  match (w, o) with
+  | ([], []) => []
+  | ([], _ :: _) => [(false, MEpsilon)] (* shouldn't arise! *)
+  | (_ :: _, []) => [(false, MEpsilon)] (* shouldn't arise! *)
+  | (a0 :: w', v0 :: o') => 
+      let mNew := read a0 mr in
+      let b    := finalWith v0 mNew in
+      let mNew' := followWith false v0 mNew in
+      (b, mNew') :: (matcherStatesAux mNew' w' o')
+  end.
+
+(* we should use this function only when |w| + 1 = |o| *)
+Definition matcherStates (or : ORegex) (os : @ostring A) : list (bool * MRegex) :=
+  let mr := toMarked or in
+  match os with
+  | (_, []) => [(false, mr)] (* shouldn't arise! *)
+  | (w, o0 :: o') =>
+      let b0  := nullableWith o0 mr in
+      let mr' := followWith true o0 mr in
+          (b0, mr') :: (matcherStatesAux mr' w o')
+  end.
+
+Definition oscanMatcher (r : ORegex) (os : @ostring A) : list bool :=
+  map fst (matcherStates r os).
+
+
 Lemma mmatch_eps_never :
     forall (os : ostring),
         ~ match_mregex MEpsilon os.
@@ -191,8 +372,7 @@ Proof.
     now apply mmatch_star with (n := n).
 Qed.
 
-Definition empty_oreg : ORegex :=
-    @OCharClass A (fun _ => false).
+
 
 Lemma omatch_empty_oreg_never :
     forall (os : ostring),
@@ -203,17 +383,6 @@ Proof.
     discriminate.
 Qed.
 
-Fixpoint markedLang (mr : MRegex) : ORegex :=
-match mr with 
-| MEpsilon => empty_oreg
-| MCharClass true f => OCharClass f
-| MCharClass false f => empty_oreg
-| MQueryPos n => empty_oreg
-| MQueryNeg n => empty_oreg
-| MUnion mr1 mr2 => OUnion (markedLang mr1) (markedLang mr2)
-| MConcat mr1 mr2 => OUnion (OConcat (markedLang mr1) (strip mr2)) (markedLang mr2)
-| MStar mr => OConcat (markedLang mr) (OStar (strip mr))
-end.
 
 Lemma mmatch_markedLang_iff :
     forall (mr : MRegex) (os : ostring),
@@ -328,26 +497,6 @@ Proof.
     rewrite ofirstn_olength in H0. lia.
 Qed.
 
-Fixpoint nullableWith (v : valuation) (mr : MRegex) : bool :=
-match mr with
-| MEpsilon => true
-| MCharClass _ _ => false
-| MQueryPos n => 
-    match nth_error v n with
-    | Some true => true
-    | _ => false
-    end
-| MQueryNeg n =>
-    match nth_error v n with
-    | Some false => true
-    | _ => false
-    end
-| MConcat mr1 mr2 => 
-    nullableWith v mr1 && nullableWith v mr2
-| MUnion mr1 mr2 =>
-    nullableWith v mr1 || nullableWith v mr2
-| MStar _ => true
-end.
 
 Lemma nullableWith_iff : forall (mr : MRegex) (v : valuation),
     nullableWith v mr = true <-> match_oregex (strip mr) ([], [v]).
@@ -411,31 +560,7 @@ Proof.
  - auto.
 Qed.
 
-(* this refers to the idea that if a charclass is marked, 
-   then there must be some character that it matches
-*)
-Fixpoint no_spurious_marks (mr : MRegex) : Prop :=
-match mr with
-| MEpsilon => True
-| MCharClass true p => exists a, p a = true
-| MCharClass false _ => True
-| MQueryPos _ => True
-| MQueryNeg _ => True
-| MConcat mr1 mr2 => no_spurious_marks mr1 /\ no_spurious_marks mr2
-| MUnion mr1 mr2 => no_spurious_marks mr1 /\ no_spurious_marks mr2
-| MStar mr => no_spurious_marks mr
-end.
 
-Fixpoint finalWith (v : valuation) (mr : MRegex) : bool :=
-match mr with
-| MEpsilon => false
-| MCharClass b p => b
-| MQueryPos _ => false
-| MQueryNeg _ => false
-| MConcat mr1 mr2 => (finalWith v mr1 && nullableWith v mr2) || finalWith v mr2
-| MUnion mr1 mr2 => finalWith v mr1 || finalWith v mr2
-| MStar mr => finalWith v mr
-end.
 
 Lemma finalWith_fw : forall (mr : MRegex) (v1 : valuation),
     no_spurious_marks mr
@@ -583,17 +708,6 @@ Proof.
   - destruct H as [a H].
     exact (BW mr v1 a H).
 Qed.
-    
-Fixpoint read (a : A) (mr : MRegex) : MRegex :=
-  match mr with
-  | MEpsilon => MEpsilon
-  | MCharClass b p => MCharClass (b && p a) p
-  | MQueryPos n => MQueryPos n
-  | MQueryNeg n => MQueryNeg n
-  | MConcat mr1 mr2 => MConcat (read a mr1) (read a mr2)
-  | MUnion mr1 mr2 => MUnion (read a mr1) (read a mr2)
-  | MStar mr => MStar (read a mr)
-  end.
 
 Lemma read_no_spurious : forall (mr : MRegex) (a : A),
     no_spurious_marks (read a mr).
@@ -818,22 +932,6 @@ Proof.
       simpl in M3 |- *.
       subst n'. auto.
 Qed.
-
-Fixpoint initMarkWith (v : valuation) (mr : MRegex) : MRegex :=
-  match mr with
-  | MEpsilon => MEpsilon
-  | MCharClass _ p => MCharClass true p
-  | MQueryPos n => MQueryPos n
-  | MQueryNeg n => MQueryNeg n
-  | MUnion mr1 mr2 => MUnion (initMarkWith v mr1) (initMarkWith v mr2)
-  | MConcat mr1 mr2 => 
-      MConcat (initMarkWith v mr1) (
-        match nullableWith v mr1 with
-        | true => initMarkWith v mr2
-        | false => mr2
-        end)
-  | MStar mr => MStar (initMarkWith v mr)
-  end.
 
 Lemma initMarkWith_strip : forall (mr : MRegex) (v : valuation),
     strip (initMarkWith v mr) = strip mr.
@@ -1119,105 +1217,6 @@ Proof.
     auto. 
   }
 Qed.
-
-Fixpoint mark_subset (mr1 : MRegex) (mr2 : MRegex) : Prop :=
-  match mr1, mr2 with
-  | MEpsilon, MEpsilon => True
-  | MCharClass b1 p1, MCharClass b2 p2 => (p1 = p2) /\ (b1 = true -> b2 = true)
-  | MQueryPos n1, MQueryPos n2 => n1 = n2
-  | MQueryNeg n1, MQueryNeg n2 => n1 = n2
-  | MConcat mr11 mr12, MConcat mr21 mr22 => mark_subset mr11 mr21 /\ mark_subset mr12 mr22
-  | MUnion mr11 mr12, MUnion mr21 mr22 => mark_subset mr11 mr21 /\ mark_subset mr12 mr22
-  | MStar mr1, MStar mr2 => mark_subset mr1 mr2
-  | _, _ => False
-  end.
-
-Lemma mark_subset_strip : forall (mr1 mr2 : MRegex),
-    mark_subset mr1 mr2
-    -> strip mr1 = strip mr2.
-Proof.
-  induction mr1; intros mr2 Hsub; destruct mr2; try contradiction; simpl in *.
-  (* ε *)
-  - auto.
-  (* CharClass *)
-  - destruct Hsub. congruence.
-  (* QueryPos *)
-  - congruence.
-  (* QueryNeg *)
-  - congruence.
-  (* Concat *)
-  - destruct Hsub as [H1 H2].
-    rewrite IHmr1_1 with (mr2 := mr2_1); auto.
-    rewrite IHmr1_2 with (mr2 := mr2_2); auto.
-  (* Union *)
-  - destruct Hsub as [H1 H2].
-    rewrite IHmr1_1 with (mr2 := mr2_1); auto.
-    rewrite IHmr1_2 with (mr2 := mr2_2); auto.
-  (* Star *)
-  - rewrite IHmr1 with (mr2 := mr2); auto.
-Qed.
-
-
-Lemma mark_subset_mmatch : forall (mr1 mr2 : MRegex) (os : ostring),
-    mark_subset mr1 mr2
-    -> match_mregex mr1 os
-    -> match_mregex mr2 os.
-Proof.
-  induction mr1; intros mr2 os Hsub M1.
-  (* ε *)
-  - pose proof mmatch_eps_never _ M1. contradiction.
-  (* CharClass *)
-  - destruct mr2; inversion Hsub. subst.
-    destruct b eqn:Eb.
-    + specialize (H0 eq_refl). subst.
-      inversion M1; subst.
-      apply mmatch_charclass with (a := a); auto.
-    + pose proof mmatch_unmarked_never _ _ M1. contradiction.
-  (* QueryPos *)
-  - destruct mr2; inversion Hsub.
-    subst. auto.
-  (* QueryNeg *)
-  - destruct mr2; inversion Hsub.
-    subst. auto.
-  (* Concat *)
-  - destruct mr2; inversion Hsub.
-    inversion M1; subst.
-    + apply mmatch_concat_l with (n := n).
-      * apply IHmr1_1; auto.
-      * rewrite <- mark_subset_strip with (mr1 := mr1_2); auto.
-    + apply mmatch_concat_r; auto. 
-  (* Union *)
-  - destruct mr2; inversion Hsub.
-    inversion M1; subst.
-    + apply mmatch_union_l; auto.
-    + apply mmatch_union_r; auto.
-  (* Star *)
-  - destruct mr2; simpl in Hsub; try contradiction.
-    inversion M1; subst.
-    apply mmatch_star with (n := n); auto.
-    rewrite <- mark_subset_strip with (mr1 := mr1); auto.
-Qed.
-
-Fixpoint shiftWith (v : valuation) (mr : MRegex) : MRegex :=
-  match mr with
-  | MEpsilon => MEpsilon
-  | MCharClass b p => MCharClass false p
-  | MQueryPos n => MQueryPos n
-  | MQueryNeg n => MQueryNeg n
-  | MUnion mr1 mr2 => MUnion (shiftWith v mr1) (shiftWith v mr2)
-  | MConcat mr1 mr2 => 
-      MConcat 
-        (shiftWith v mr1) 
-        (match finalWith v mr1 with
-        | true => initMarkWith v (shiftWith v mr2)
-        | false => shiftWith v mr2
-        end)
-  | MStar mr => MStar (
-      match finalWith v mr with
-      | true => initMarkWith v (shiftWith v mr)
-      | false => shiftWith v mr
-      end)
-  end.
 
 Lemma shiftWith_strip : forall (mr : MRegex) (v : valuation),
     strip (shiftWith v mr) = strip mr.
@@ -1632,18 +1631,7 @@ Proof.
   }
 Qed.
   
-Fixpoint followWith (b : bool) (v : valuation) (mr : MRegex) : MRegex :=
-  match mr with
-  | MEpsilon => MEpsilon
-  | MCharClass _ p => MCharClass b p
-  | MQueryPos n => MQueryPos n
-  | MQueryNeg n => MQueryNeg n
-  | MUnion mr1 mr2 => MUnion (followWith b v mr1) (followWith b v mr2)
-  | MConcat mr1 mr2 =>
-      let b1 := (finalWith v mr1) || (b && (nullableWith v mr1)) in
-      MConcat (followWith b v mr1) (followWith b1 v mr2)
-  | MStar mr => MStar (followWith (b || (finalWith v mr)) v mr)
-  end.
+
 
 Lemma nullableWith_shiftWith : forall (mr : MRegex) (v : valuation),
     nullableWith v (shiftWith v mr) = nullableWith v mr.
@@ -1730,16 +1718,7 @@ Proof.
   tauto.
 Qed.
 
-Fixpoint toMarked (or : @ORegex A) : MRegex :=
-  match or with
-  | OEpsilon => MEpsilon
-  | OCharClass p => MCharClass false p
-  | OQueryPos n => MQueryPos n
-  | OQueryNeg n => MQueryNeg n
-  | OUnion or1 or2 => MUnion (toMarked or1) (toMarked or2)
-  | OConcat or1 or2 => MConcat (toMarked or1) (toMarked or2)
-  | OStar or => MStar (toMarked or)
-  end.
+
 
 Lemma toMarked_strip : forall (or : @ORegex A),
     strip (toMarked or) = or.
@@ -1786,25 +1765,6 @@ Lemma mmatch_toMarked_never : forall (or : ORegex) (os : @ostring A),
 Proof.
   induction or; simpl; intros os H; inversion H; subst; firstorder.
 Qed.
-
-(* when using, we want |w| = |o| *)
-Fixpoint consumeAux (mr : MRegex) (w : list A) (o : list valuation) : MRegex :=
-  match (w, o) with
-  | ([], []) => mr
-  | ([], _ :: _) => MEpsilon (* shouldn't arise! *)
-  | (_ :: _, []) => MEpsilon (* shouldn't arise! *)
-  | (a0 :: w', v1 :: o') => 
-      let mNew := read a0 mr in
-      let mNew' := followWith false v1 mNew in
-          consumeAux mNew' w' o'
-  end.
-
-Definition consume (or : ORegex) (os : @ostring A) : MRegex :=
-  let mr := toMarked or in
-  match os with
-  | (_, []) => mr
-  | (w, o0 :: o') => consumeAux (followWith true o0 mr) w o'
-  end.
 
 Lemma consume_cons (or : ORegex) (a0 : A) (v0 : valuation)
   (w : list A) (o : list valuation) :
@@ -2340,29 +2300,7 @@ Proof.
 Qed.
 
 
-(* when using this function, we will make sure that |w| = |o| *)
-Fixpoint matcherStatesAux (mr : MRegex) (w : list A) (o : list valuation) : list (bool * MRegex) :=
-  match (w, o) with
-  | ([], []) => []
-  | ([], _ :: _) => [(false, MEpsilon)] (* shouldn't arise! *)
-  | (_ :: _, []) => [(false, MEpsilon)] (* shouldn't arise! *)
-  | (a0 :: w', v0 :: o') => 
-      let mNew := read a0 mr in
-      let b    := finalWith v0 mNew in
-      let mNew' := followWith false v0 mNew in
-      (b, mNew') :: (matcherStatesAux mNew' w' o')
-  end.
 
-(* we should use this function only when |w| + 1 = |o| *)
-Definition matcherStates (or : ORegex) (os : @ostring A) : list (bool * MRegex) :=
-  let mr := toMarked or in
-  match os with
-  | (_, []) => [(false, mr)] (* shouldn't arise! *)
-  | (w, o0 :: o') =>
-      let b0  := nullableWith o0 mr in
-      let mr' := followWith true o0 mr in
-          (b0, mr') :: (matcherStatesAux mr' w o')
-  end.
 
 Lemma matcherStatesAux_snoc (mr : MRegex) (w : list A) (o : list valuation) 
   (a' : A) (v' : valuation) :
@@ -2968,10 +2906,6 @@ Proof.
   rewrite toMarked_strip in H. rewrite <- H.
   split; intros HSome; inversion HSome; auto.
 Qed.
-
-
-Definition oscanMatcher (r : ORegex) (os : @ostring A) : list bool :=
-  map fst (matcherStates r os).
 
 Lemma oscanMatcher_tape (r : ORegex) (os : @ostring A) :
   outer_length_wf os

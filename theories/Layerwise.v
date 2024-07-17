@@ -99,6 +99,55 @@ Definition is_otape_slice (r : ORegex) (os : @ostring A) (t : tape) (start delta
       (nth_error t i = Some true <-> match_oregex r (ofirstn i (oskipn start os))) /\
       (nth_error t i = Some false <-> ~ match_oregex r (ofirstn i (oskipn start os))).
 
+Definition is_oscanMatcher (oscanMatch : @ORegex A -> @ostring A -> tape) : Prop :=
+  forall r os,
+    outer_length_wf os
+    -> is_otape r os (oscanMatch r os).
+
+Definition absEval (scanMatch : @ORegex A -> @ostring A -> tape) (w : list A) (r : @LRegex A) : @ORegex A * list valuation :=
+  let wrev := rev w in
+  let len := length w in
+  match absEvalAux scanMatch w wrev (len + 1) r 0 [] with
+  | (o, _, vs) => (o, transpose (len + 1) (rev vs))
+  end.
+
+Definition scanMatchWith (scanMatchONFA : @ORegex A -> @ostring A -> tape) (w : list A) (r : @LRegex A) : tape :=
+  let (o, vs) := absEval scanMatchONFA w r in
+  scanMatchONFA o (w, vs).
+
+Definition scanMatchSliceWith 
+  (scanMatchONFA : @ORegex A -> @ostring A -> tape)
+  (w : list A) (r : @LRegex A) (start delta : nat) : tape :=
+  let (o, vs) := absEval scanMatchONFA w r in
+  scanMatchONFA o (ofirstn delta (oskipn start (w, vs))).
+
+Definition scanMatch (r : @LRegex A) (w : list A) : tape :=
+  scanMatchWith (@cScanMatch A) w r.
+
+Definition scanMatchSlice (r : @LRegex A) (w : list A) (start delta : nat) : tape :=
+  scanMatchSliceWith (@cScanMatch A) w r start delta.
+
+Definition llmatch (r : @LRegex A) (w : list A) : option (nat * nat) :=
+  (* abstraction *)
+  let (or, vs) := absEval (@cScanMatch A) w r in
+  (* reverse pass *)
+  let bw_tape := cScanMatch (rPass (oreverse or)) (orev (w, vs)) in
+  (* left-end point *)
+  let lendO := find_largest_true bw_tape in
+  match lendO with
+  | None => None (* no left end point found *)
+  | Some lend' =>
+  let lend := length w - lend' in
+  (* forward pass *)
+  let fw_tape := cScanMatch or (oskipn lend (w, vs)) in
+  (* maximum length *)
+  let d := find_largest_true fw_tape in
+  match d with
+  | None => None (* should be impossible *)
+  | Some d => Some (lend, d)
+  end
+  end.
+
 Lemma is_otape_oval (r : @LRegex A) (w : list A) (vs : list valuation) (t : tape) :
   is_oval r w vs
   -> is_otape (abstract r) (w, vs) t
@@ -229,11 +278,6 @@ Proof.
   all: unfold arity in * ; simpl; repeat rewrite app_length;
        lia.
 Qed.
-
-Definition is_oscanMatcher (oscanMatch : @ORegex A -> @ostring A -> tape) : Prop :=
-  forall r os,
-    outer_length_wf os
-    -> is_otape r os (oscanMatch r os).
 
 Lemma oscanMatcher_slice (oscanMatch : @ORegex A -> @ostring A -> tape) 
   (start delta : nat) (HoscanMatch : is_oscanMatcher oscanMatch): 
@@ -685,22 +729,7 @@ Proof.
   apply Htape.
 Qed.
 
-Definition absEval (scanMatch : @ORegex A -> @ostring A -> tape) (w : list A) (r : @LRegex A) : @ORegex A * list valuation :=
-  let wrev := rev w in
-  let len := length w in
-  match absEvalAux scanMatch w wrev (len + 1) r 0 [] with
-  | (o, _, vs) => (o, transpose (len + 1) (rev vs))
-  end.
 
-Definition scanMatchWith (scanMatchONFA : @ORegex A -> @ostring A -> tape) (w : list A) (r : @LRegex A) : tape :=
-  let (o, vs) := absEval scanMatchONFA w r in
-  scanMatchONFA o (w, vs).
-
-Definition scanMatchSliceWith 
-  (scanMatchONFA : @ORegex A -> @ostring A -> tape)
-  (w : list A) (r : @LRegex A) (start delta : nat) : tape :=
-  let (o, vs) := absEval scanMatchONFA w r in
-  scanMatchONFA o (ofirstn delta (oskipn start (w, vs))).
 
 Lemma absEval_spec (scanMatch : @ORegex A -> @ostring A -> tape) (w : list A) (r : @LRegex A) :
   is_oscanMatcher scanMatch
@@ -798,12 +827,6 @@ Proof.
   pose proof (cScanMatch_tape r os).
   firstorder.
 Qed.
-
-Definition scanMatch (r : @LRegex A) (w : list A) : tape :=
-  scanMatchWith (@cScanMatch A) w r.
-
-Definition scanMatchSlice (r : @LRegex A) (w : list A) (start delta : nat) : tape :=
-  scanMatchSliceWith (@cScanMatch A) w r start delta.
 
 Lemma scanMatch_correct : forall r w,
   is_tape r w (scanMatch r w).
@@ -939,27 +962,6 @@ Proof.
   rewrite <- oracle_compose_aux; auto.
   lia.
 Qed.
-
-Definition llmatch (r : @LRegex A) (w : list A) : option (nat * nat) :=
-  (* abstraction *)
-  let (or, vs) := absEval (@cScanMatch A) w r in
-  (* reverse pass *)
-  let bw_tape := cScanMatch (rPass (oreverse or)) (orev (w, vs)) in
-  (* left-end point *)
-  let lendO := find_largest_true bw_tape in
-  match lendO with
-  | None => None (* no left end point found *)
-  | Some lend' =>
-  let lend := length w - lend' in
-  (* forward pass *)
-  let fw_tape := cScanMatch or (oskipn lend (w, vs)) in
-  (* maximum length *)
-  let d := find_largest_true fw_tape in
-  match d with
-  | None => None (* should be impossible *)
-  | Some d => Some (lend, d)
-  end
-  end.
 
 Lemma reverse_pass_Some (r : @LRegex A) (or : ORegex) (w : list A) (vs : list valuation) :
   outer_length_wf (w, vs)

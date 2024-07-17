@@ -100,6 +100,126 @@ Fixpoint synced (v : valuation) (r : CMRegex) : Prop :=
      /\ synced v r1
     end.
 
+Fixpoint unCache (r : CMRegex) : MRegex :=
+  match cRe r with
+  | CMEpsilon => MEpsilon
+  | CMCharClass f => MCharClass (cFinal r) f
+  | CMQueryPos n => MQueryPos n
+  | CMQueryNeg n => MQueryNeg n
+  | CMConcat r1 r2 => MConcat (unCache r1) (unCache r2)
+  | CMUnion r1 r2 => MUnion (unCache r1) (unCache r2)
+  | CMStar r1 => MStar (unCache r1)
+  end.
+
+Fixpoint syncVal (v : valuation) (r : CMRegex) : CMRegex :=
+  match cRe r with
+  | CMEpsilon => mkEpsilon
+  | CMCharClass f => mkCharClass (cFinal r) f
+  | CMQueryPos n => mkQueryPos (match nth_error v n with
+                                  | Some true => true
+                                  | _ => false
+                                end) n
+  | CMQueryNeg n => mkQueryNeg (match nth_error v n with
+                                  | Some false => true
+                                  | _ => false
+                                end) n
+  | CMConcat r1 r2 => mkConcat (syncVal v r1) (syncVal v r2)
+  | CMUnion r1 r2 => mkUnion (syncVal v r1) (syncVal v r2)
+  | CMStar r1 => mkStar (syncVal v r1)
+  end.
+
+Fixpoint cRead (a : A) (r : CMRegex) : CMRegex :=
+  match cRe r with
+  | CMEpsilon => r
+  | CMCharClass f => mkCharClass (cFinal r && f a) f
+  | CMQueryPos n => r
+  | CMQueryNeg n => r
+  | CMConcat r1 r2 => mkConcat (cRead a r1) (cRead a r2)
+  | CMUnion r1 r2 => mkUnion (cRead a r1) (cRead a r2)
+  | CMStar r1 => mkStar (cRead a r1)
+  end.
+
+Fixpoint cFollow (b : bool) (r : CMRegex) : CMRegex :=
+  match cRe r with
+  | CMEpsilon => mkEpsilon
+  | CMCharClass f => mkCharClass b f
+  | CMQueryPos n => r
+  | CMQueryNeg n => r
+  | CMConcat r1 r2 => 
+    let b1 := cFinal r1 || (b && cNullable r1) in
+    mkConcat (cFollow b r1) (cFollow b1 r2)
+  | CMUnion r1 r2 => mkUnion (cFollow b r1) (cFollow b r2)
+  | CMStar r1 => mkStar (cFollow (b || cFinal r1) r1)
+  end.
+
+Fixpoint toCMarked (or : @ORegex A) : CMRegex :=
+  match or with
+  | OEpsilon => mkEpsilon
+  | OCharClass f => mkCharClass false f
+  | OQueryPos n => mkQueryPos false n
+  | OQueryNeg n => mkQueryNeg false n
+  | OConcat or1 or2 => mkConcat (toCMarked or1) (toCMarked or2)
+  | OUnion or1 or2 => mkUnion (toCMarked or1) (toCMarked or2)
+  | OStar or1 => mkStar (toCMarked or1)
+  end.
+
+(* when using, we want |w| = |o| *)
+Fixpoint cConsumeAux (cmr : CMRegex) (w : list A) (o : list valuation) : CMRegex :=
+  match w, o with
+  | [], [] => cmr
+  | [], _ :: _ => mkEpsilon (* shouldn't arise! *)
+  | _ :: _, [] => mkEpsilon (* shouldn't arise! *)
+  | a0 :: w', v1 :: o' => 
+    let cmrNew := cFollow false cmr in
+    let cmrNew' := cRead a0 cmrNew in
+    let cmrNew'' := syncVal v1 cmrNew' in
+    cConsumeAux cmrNew'' w' o'
+  end.
+
+
+Definition cConsume (or : ORegex) (os : @ostring A) : CMRegex :=
+  let cmr := toCMarked or in
+  match os with
+  | (_, []) => cmr (* shouldn't arise! *)
+  | ([], [o0]) => syncVal o0 cmr
+  | (_ , _ :: []) => cmr (* shouldn't arise! *)
+  | (a0 :: w', o0 :: o1 :: o') =>
+    let cmr0   := cFollow true (syncVal o0 cmr) in
+    let cmr0'  := cRead a0 cmr0 in
+    let cmr0'' := syncVal o1 cmr0' in
+    cConsumeAux cmr0'' w' o'
+  | (_, _ :: _ :: _) => cmr (* shouldn't arise! *)
+  end.
+
+(* when using, we want |w| = |o| *)
+Fixpoint cScanMatchAux (cmr : CMRegex) (w : list A) (o : list valuation) : list bool :=
+  let b := cFinal cmr in
+  match w, o with
+  | [], [] => [b]
+  | [], _ :: _ => [b] (* shouldn't arise! *)
+  | _ :: _, [] => [b] (* shouldn't arise! *)
+  | a0 :: w', v1 :: o' => 
+    let cmrNew := cFollow false cmr in
+    let cmrNew' := cRead a0 cmrNew in
+    let cmrNew'' := syncVal v1 cmrNew' in
+    b :: cScanMatchAux cmrNew'' w' o'
+  end.
+
+Definition cScanMatch (or : ORegex) (os : @ostring A) : list bool :=
+  let cmr := toCMarked or in
+  match os with
+  | (_, []) => [] (* shouldn't arise! *)
+  | ([], [o0]) => [cNullable (syncVal o0 cmr)]
+  | (_ , _ :: []) => [] (* shouldn't arise! *)
+  | (a0 :: w', o0 :: o1 :: o') =>
+    let b0 := cNullable (syncVal o0 cmr) in
+    let cmr0   := cFollow true (syncVal o0 cmr) in
+    let cmr0'  := cRead a0 cmr0 in
+    let cmr0'' := syncVal o1 cmr0' in
+    b0 :: cScanMatchAux cmr0'' w' o'
+  | (_, _ :: _ :: _) => [] (* shouldn't arise! *)
+  end.
+
 Hint Unfold synced : regex.
 
 Lemma synced_mkEpsilon :
@@ -170,16 +290,7 @@ Hint Resolve synced_mkConcat : regex.
 Hint Resolve synced_mkUnion : regex.
 Hint Resolve synced_mkStar : regex.
 
-Fixpoint unCache (r : CMRegex) : MRegex :=
-  match cRe r with
-  | CMEpsilon => MEpsilon
-  | CMCharClass f => MCharClass (cFinal r) f
-  | CMQueryPos n => MQueryPos n
-  | CMQueryNeg n => MQueryNeg n
-  | CMConcat r1 r2 => MConcat (unCache r1) (unCache r2)
-  | CMUnion r1 r2 => MUnion (unCache r1) (unCache r2)
-  | CMStar r1 => MStar (unCache r1)
-  end.
+
 
 Fixpoint CMRegex_ind_2 (P : CMRe -> Prop) 
   (HEps: P CMEpsilon)
@@ -295,22 +406,7 @@ Proof.
     }
 Qed.
     
-Fixpoint syncVal (v : valuation) (r : CMRegex) : CMRegex :=
-  match cRe r with
-  | CMEpsilon => mkEpsilon
-  | CMCharClass f => mkCharClass (cFinal r) f
-  | CMQueryPos n => mkQueryPos (match nth_error v n with
-                                  | Some true => true
-                                  | _ => false
-                                end) n
-  | CMQueryNeg n => mkQueryNeg (match nth_error v n with
-                                  | Some false => true
-                                  | _ => false
-                                end) n
-  | CMConcat r1 r2 => mkConcat (syncVal v r1) (syncVal v r2)
-  | CMUnion r1 r2 => mkUnion (syncVal v r1) (syncVal v r2)
-  | CMStar r1 => mkStar (syncVal v r1)
-  end.
+
 
 Lemma synced_syncVal (v : valuation) (r : CMRegex) :
     synced v (syncVal v r).
@@ -397,17 +493,6 @@ Proof.
   }
 Qed.
 
-
-Fixpoint cRead (a : A) (r : CMRegex) : CMRegex :=
-  match cRe r with
-  | CMEpsilon => r
-  | CMCharClass f => mkCharClass (cFinal r && f a) f
-  | CMQueryPos n => r
-  | CMQueryNeg n => r
-  | CMConcat r1 r2 => mkConcat (cRead a r1) (cRead a r2)
-  | CMUnion r1 r2 => mkUnion (cRead a r1) (cRead a r2)
-  | CMStar r1 => mkStar (cRead a r1)
-  end.
 
 Lemma synced_cRead (v : valuation) (r : CMRegex) (a : A) :
     synced v r -> synced v (cRead a r).
@@ -497,19 +582,6 @@ Proof.
   }
 Qed.
 
-Fixpoint cFollow (b : bool) (r : CMRegex) : CMRegex :=
-  match cRe r with
-  | CMEpsilon => mkEpsilon
-  | CMCharClass f => mkCharClass b f
-  | CMQueryPos n => r
-  | CMQueryNeg n => r
-  | CMConcat r1 r2 => 
-    let b1 := cFinal r1 || (b && cNullable r1) in
-    mkConcat (cFollow b r1) (cFollow b1 r2)
-  | CMUnion r1 r2 => mkUnion (cFollow b r1) (cFollow b r2)
-  | CMStar r1 => mkStar (cFollow (b || cFinal r1) r1)
-  end.
-
 Lemma synced_unCache_followWith (v : valuation) (r : CMRegex) (b : bool) :
   synced v r
   -> unCache (cFollow b r) = followWith b v (unCache r).
@@ -562,16 +634,7 @@ Proof.
   }
 Qed.
 
-Fixpoint toCMarked (or : @ORegex A) : CMRegex :=
-  match or with
-  | OEpsilon => mkEpsilon
-  | OCharClass f => mkCharClass false f
-  | OQueryPos n => mkQueryPos false n
-  | OQueryNeg n => mkQueryNeg false n
-  | OConcat or1 or2 => mkConcat (toCMarked or1) (toCMarked or2)
-  | OUnion or1 or2 => mkUnion (toCMarked or1) (toCMarked or2)
-  | OStar or1 => mkStar (toCMarked or1)
-  end.
+
 
 Lemma toCMarked_unCache (or : @ORegex A) :
   unCache (toCMarked or) = toMarked or.
@@ -580,33 +643,7 @@ Proof.
   all: congruence.
 Qed.
 
-(* when using, we want |w| = |o| *)
-Fixpoint cConsumeAux (cmr : CMRegex) (w : list A) (o : list valuation) : CMRegex :=
-  match w, o with
-  | [], [] => cmr
-  | [], _ :: _ => mkEpsilon (* shouldn't arise! *)
-  | _ :: _, [] => mkEpsilon (* shouldn't arise! *)
-  | a0 :: w', v1 :: o' => 
-    let cmrNew := cFollow false cmr in
-    let cmrNew' := cRead a0 cmrNew in
-    let cmrNew'' := syncVal v1 cmrNew' in
-    cConsumeAux cmrNew'' w' o'
-  end.
 
-
-Definition cConsume (or : ORegex) (os : @ostring A) : CMRegex :=
-  let cmr := toCMarked or in
-  match os with
-  | (_, []) => cmr (* shouldn't arise! *)
-  | ([], [o0]) => syncVal o0 cmr
-  | (_ , _ :: []) => cmr (* shouldn't arise! *)
-  | (a0 :: w', o0 :: o1 :: o') =>
-    let cmr0   := cFollow true (syncVal o0 cmr) in
-    let cmr0'  := cRead a0 cmr0 in
-    let cmr0'' := syncVal o1 cmr0' in
-    cConsumeAux cmr0'' w' o'
-  | (_, _ :: _ :: _) => cmr (* shouldn't arise! *)
-  end.
 
 Lemma cConsumeAux_snoc (cmr : CMRegex) (w : list A) (o : list valuation) 
   (a' : A) (v' : valuation) :
@@ -777,34 +814,7 @@ Proof.
   now apply membership_nonempty.
 Qed.
 
-(* when using, we want |w| = |o| *)
-Fixpoint cScanMatchAux (cmr : CMRegex) (w : list A) (o : list valuation) : list bool :=
-  let b := cFinal cmr in
-  match w, o with
-  | [], [] => [b]
-  | [], _ :: _ => [b] (* shouldn't arise! *)
-  | _ :: _, [] => [b] (* shouldn't arise! *)
-  | a0 :: w', v1 :: o' => 
-    let cmrNew := cFollow false cmr in
-    let cmrNew' := cRead a0 cmrNew in
-    let cmrNew'' := syncVal v1 cmrNew' in
-    b :: cScanMatchAux cmrNew'' w' o'
-  end.
 
-Definition cScanMatch (or : ORegex) (os : @ostring A) : list bool :=
-  let cmr := toCMarked or in
-  match os with
-  | (_, []) => [] (* shouldn't arise! *)
-  | ([], [o0]) => [cNullable (syncVal o0 cmr)]
-  | (_ , _ :: []) => [] (* shouldn't arise! *)
-  | (a0 :: w', o0 :: o1 :: o') =>
-    let b0 := cNullable (syncVal o0 cmr) in
-    let cmr0   := cFollow true (syncVal o0 cmr) in
-    let cmr0'  := cRead a0 cmr0 in
-    let cmr0'' := syncVal o1 cmr0' in
-    b0 :: cScanMatchAux cmr0'' w' o'
-  | (_, _ :: _ :: _) => [] (* shouldn't arise! *)
-  end.
 
 Lemma cScanMatchAux_hd_error (cmr : CMRegex) (w : list A) (o : list valuation) :
   hd_error (cScanMatchAux cmr w o) = Some (cFinal cmr).

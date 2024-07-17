@@ -44,6 +44,55 @@ Definition oskipn (n : nat) (s : ostring) : ostring :=
     skipn (Nat.min n (length (fst s))) (snd s)).
 Definition orev (s : ostring) : ostring :=
   (rev (fst s), rev (snd s)).
+Definition ofirstval (os : ostring) : option valuation :=
+  hd_error (snd os).
+Definition olastval (os : ostring) : option valuation :=
+  last_error (snd os).
+
+Inductive ORegex : Type :=
+| OEpsilon : ORegex
+| OCharClass : (A -> bool) -> ORegex
+| OConcat : ORegex -> ORegex -> ORegex
+| OUnion : ORegex -> ORegex -> ORegex
+| OStar : ORegex -> ORegex
+| OQueryPos : nat -> ORegex
+| OQueryNeg : nat -> ORegex
+.
+
+Inductive match_oregex : ORegex -> ostring -> Prop :=
+| omatch_epsilon : 
+  forall (os : ostring), olength os = 0 -> match_oregex OEpsilon os
+| omatch_charclass :
+  forall (os : ostring) (a : A) (pred : A -> bool),
+    olength os = 1 -> (hd_error (fst os)) = Some a -> pred a = true -> match_oregex (OCharClass pred) os
+| omatch_concat :
+   forall (r1 r2 : ORegex) (os : ostring) (n : nat),
+     match_oregex r1 (ofirstn n os) -> match_oregex r2 (oskipn n os) -> match_oregex (OConcat r1 r2) os
+| omatch_union_l :
+    forall (r1 r2 : ORegex) (os : ostring),
+      match_oregex r1 os -> match_oregex (OUnion r1 r2) os
+| omatch_union_r :
+    forall (r1 r2 : ORegex) (os : ostring),
+      match_oregex r2 os -> match_oregex (OUnion r1 r2) os
+| omatch_star_eps :
+    forall (r : ORegex) (os : ostring),
+      olength os = 0 -> match_oregex (OStar r) os
+| omatch_star :
+    forall (r : ORegex) (os : ostring) (n : nat),
+      match_oregex r (ofirstn n os) -> match_oregex (OStar r) (oskipn n os) -> match_oregex (OStar r) os
+| omatch_query_pos :
+    forall (os : ostring) (v : valuation) (q : nat),
+      olength os = 0 -> hd_error (snd os) = Some v -> nth_error v q = Some true -> match_oregex (OQueryPos q) os
+| omatch_query_neg :
+    forall (os : ostring) (v : valuation) (q : nat),
+      olength os = 0 -> hd_error (snd os) = Some v -> nth_error v q = Some false -> match_oregex (OQueryNeg q) os
+.
+
+Definition oWildCard : ORegex :=
+  OStar (OCharClass (fun _ => true)).
+
+Definition rPass (or : ORegex) : ORegex :=
+  OConcat oWildCard or.
 
 Lemma ofirstn_outer_length_wf : forall n s,
   outer_length_wf s -> outer_length_wf (ofirstn n s).
@@ -354,9 +403,6 @@ Proof.
     }
 Qed.
 
-Definition ofirstval (os : ostring) : option valuation :=
-  hd_error (snd os).
-
 Lemma ofirstval_Some (os : ostring) :
   outer_length_wf os -> exists v0, ofirstval os = Some v0.
 Proof.
@@ -367,9 +413,6 @@ Proof.
   - simpl in Hwf. lia.
   - exists v0. auto.
 Qed.
-
-Definition olastval (os : ostring) : option valuation :=
-  last_error (snd os).
 
 Lemma olastval_Some (os : ostring) :
   outer_length_wf os -> exists v0, olastval os = Some v0.
@@ -429,46 +472,6 @@ Proof.
     unfold outer_length_wf. simpl.
     repeat rewrite app_length in Hwf. simpl in Hwf. lia.
 Qed.
-
-  
-Inductive ORegex : Type :=
-| OEpsilon : ORegex
-| OCharClass : (A -> bool) -> ORegex
-| OConcat : ORegex -> ORegex -> ORegex
-| OUnion : ORegex -> ORegex -> ORegex
-| OStar : ORegex -> ORegex
-| OQueryPos : nat -> ORegex
-| OQueryNeg : nat -> ORegex
-.
-
-Inductive match_oregex : ORegex -> ostring -> Prop :=
-| omatch_epsilon : 
-  forall (os : ostring), olength os = 0 -> match_oregex OEpsilon os
-| omatch_charclass :
-  forall (os : ostring) (a : A) (pred : A -> bool),
-    olength os = 1 -> (hd_error (fst os)) = Some a -> pred a = true -> match_oregex (OCharClass pred) os
-| omatch_concat :
-   forall (r1 r2 : ORegex) (os : ostring) (n : nat),
-     match_oregex r1 (ofirstn n os) -> match_oregex r2 (oskipn n os) -> match_oregex (OConcat r1 r2) os
-| omatch_union_l :
-    forall (r1 r2 : ORegex) (os : ostring),
-      match_oregex r1 os -> match_oregex (OUnion r1 r2) os
-| omatch_union_r :
-    forall (r1 r2 : ORegex) (os : ostring),
-      match_oregex r2 os -> match_oregex (OUnion r1 r2) os
-| omatch_star_eps :
-    forall (r : ORegex) (os : ostring),
-      olength os = 0 -> match_oregex (OStar r) os
-| omatch_star :
-    forall (r : ORegex) (os : ostring) (n : nat),
-      match_oregex r (ofirstn n os) -> match_oregex (OStar r) (oskipn n os) -> match_oregex (OStar r) os
-| omatch_query_pos :
-    forall (os : ostring) (v : valuation) (q : nat),
-      olength os = 0 -> hd_error (snd os) = Some v -> nth_error v q = Some true -> match_oregex (OQueryPos q) os
-| omatch_query_neg :
-    forall (os : ostring) (v : valuation) (q : nat),
-      olength os = 0 -> hd_error (snd os) = Some v -> nth_error v q = Some false -> match_oregex (OQueryNeg q) os
-.
 
 Lemma omatch_charclass_iff : forall (os : ostring) (pred : A -> bool),
   match_oregex (OCharClass pred) os 
@@ -686,9 +689,6 @@ Proof.
     (r := r) (n := n); auto.
 Qed. 
 
-Definition oWildCard : ORegex :=
-  OStar (OCharClass (fun _ => true)).
-
 Lemma oWildCard_match (os : ostring) (Hwf : outer_length_wf os) :
   match_oregex oWildCard os.
 Proof.
@@ -719,9 +719,6 @@ Proof.
     simpl in Hwf |- *.
     lia.
 Qed.
-
-Definition rPass (or : ORegex) : ORegex :=
-  OConcat oWildCard or.
 
 Lemma rPass_match (or : ORegex) (os : ostring) (Hwf : outer_length_wf os): 
   match_oregex (rPass or) os

@@ -118,6 +118,25 @@ with not_match_regex : LRegex -> list A -> nat -> nat -> Prop :=
     match_regex r w 0 start -> not_match_regex ((?<! r)) w start delta
 .
 
+Definition is_tape (r : LRegex) (w : list A) (t : list bool) : Prop :=
+    (length t = length w + 1) /\
+    forall delta,
+        delta <= length w ->
+        (nth_error t delta = Some true <-> match_regex r w 0 delta) /\
+        (nth_error t delta = Some false <-> ~ match_regex r w 0 delta).
+
+Definition is_tape_slice (r : LRegex) (w : list A) (t : list bool) (start delta : nat) : Prop :=
+    start + delta <= length w /\
+    (length t = delta + 1) /\
+    forall i,
+        i <= delta ->
+        (nth_error t i = Some true <-> match_regex r w start i) /\
+        (nth_error t i = Some false <-> ~ match_regex r w start i).
+
+Definition is_scanMatcher (scanMatch : LRegex -> list A -> list bool) : Prop :=
+    forall r w,
+        is_tape r w (scanMatch r w).
+
 Lemma match_eps_iff : forall w start delta,
     match_regex ε w start delta <-> delta = 0.
 Proof.
@@ -611,25 +630,6 @@ Proof.
     pose proof match_iff_not_match_aux r w start delta.
     firstorder.
 Qed.
-
-Definition is_tape (r : LRegex) (w : list A) (t : list bool) : Prop :=
-    (length t = length w + 1) /\
-    forall delta,
-        delta <= length w ->
-        (nth_error t delta = Some true <-> match_regex r w 0 delta) /\
-        (nth_error t delta = Some false <-> ~ match_regex r w 0 delta).
-
-Definition is_tape_slice (r : LRegex) (w : list A) (t : list bool) (start delta : nat) : Prop :=
-    start + delta <= length w /\
-    (length t = delta + 1) /\
-    forall i,
-        i <= delta ->
-        (nth_error t i = Some true <-> match_regex r w start i) /\
-        (nth_error t i = Some false <-> ~ match_regex r w start i).
-
-Definition is_scanMatcher (scanMatch : LRegex -> list A -> list bool) : Prop :=
-    forall r w,
-        is_tape r w (scanMatch r w).
 
 Lemma tape_length : forall r w t,
     is_tape r w t

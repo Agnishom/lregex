@@ -35,6 +35,38 @@ Section Equations.
 
 Context {A : Type}.
 
+Definition regex_eq (r1 r2 : @LRegex A) : Prop :=
+    forall w start delta,
+        match_regex r1 w start delta <-> match_regex r2 w start delta.
+
+Infix "≡" := regex_eq (at level 70, no associativity).
+
+Definition regex_leq (r s : LRegex) : Prop :=
+    r ∪ s ≡ s.
+
+Notation "r ⊑ s" := (regex_leq r s) (at level 70).
+
+Definition suffix_match (r : LRegex) (w : list A) (i : nat) : Prop :=
+    match_regex r w i (length w - i).
+
+Definition wildcard : (@LRegex A) := (CharClass (fun _ => true)) *.
+
+Definition end_of_string : (@LRegex A) := 
+    (?!> (CharClass (fun _ => true)) · wildcard).
+
+Fixpoint regex_exp (r : LRegex) (n : nat) : (@LRegex A) :=
+    match n with
+    | 0 => Epsilon
+    | S n' => r · (regex_exp r n')
+    end.
+
+Notation "r ^^ n" := (regex_exp r n) (at level 30).
+
+Definition empty_reg : @LRegex A :=
+    CharClass (fun _ => false).
+
+Notation "∅" := empty_reg.
+
 Lemma match_length : forall r (w : list A) start delta,
     match_regex r w start delta -> delta <= length w - start.
 Proof.
@@ -67,13 +99,6 @@ Proof.
       lia.
 Qed.
 
-Definition regex_eq (r1 r2 : @LRegex A) : Prop :=
-    forall w start delta,
-        match_regex r1 w start delta <-> match_regex r2 w start delta.
-
-Definition suffix_match (r : LRegex) (w : list A) (i : nat) : Prop :=
-    match_regex r w i (length w - i).
-
 Instance regex_eq_refl : Reflexive regex_eq.
 Proof.
     intros r. unfold regex_eq. tauto.
@@ -92,8 +117,6 @@ Proof.
 Qed.
 
 Hint Resolve regex_eq_sym regex_eq_refl regex_eq_trans : regex.
-
-Infix "≡" := regex_eq (at level 70, no associativity).
 
 Instance regex_eq_equiv : Equivalence regex_eq.
 Proof.
@@ -319,8 +342,6 @@ Proof.
        repeat split; auto.
        + now constructor.
 Qed.
-
-Definition wildcard : (@LRegex A) := (CharClass (fun _ => true)) *.
 
 Lemma wildcard_match : forall w start delta,
     delta <= length w - start
@@ -731,9 +752,6 @@ Proof.
     lia.
 Qed.
 
-Definition end_of_string : (@LRegex A) := 
-    (?!> (CharClass (fun _ => true)) · wildcard).
-
 Lemma end_of_string_match : forall w start delta,
     match_regex end_of_string w start delta
     <-> delta = 0 /\ start >= length w.
@@ -849,18 +867,7 @@ Proof.
       constructor; [auto | constructor].
 Qed.
 
-Fixpoint regex_exp (r : LRegex) (n : nat) : (@LRegex A) :=
-    match n with
-    | 0 => Epsilon
-    | S n' => r · (regex_exp r n')
-    end.
 
-Notation "r ^^ n" := (regex_exp r n) (at level 30).
-
-Definition regex_leq (r s : LRegex) : Prop :=
-    r ∪ s ≡ s.
-
-Notation "r ⊑ s" := (regex_leq r s) (at level 70).
 
 Instance regex_leq_refl : Reflexive regex_leq.
 Proof.
@@ -1137,11 +1144,6 @@ Proof.
     inversion H.
     apply match_concat; auto.
 Qed.
-
-Definition empty_reg : @LRegex A :=
-    CharClass (fun _ => false).
-
-Notation "∅" := empty_reg.
 
 Lemma empty_reg_never : forall w i d,
     ~ match_regex ∅ w i d.

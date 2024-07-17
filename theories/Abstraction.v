@@ -54,62 +54,6 @@ Fixpoint maximal_lookarounds (r : @LRegex A) : list LARegex :=
 Definition arity (r : @LRegex A) : nat :=
   length (maximal_lookarounds r).
 
-Lemma arity_eps : arity Epsilon = 0.
-Proof. reflexivity. Qed.
-
-Lemma arity_char : forall c, arity (CharClass c) = 0.
-Proof. reflexivity. Qed.
-
-Lemma arity_lookahead : forall r, arity (LookAhead r) = 1.
-Proof. reflexivity. Qed.
-
-Lemma arity_lookbehind : forall r, arity (LookBehind r) = 1.
-Proof. reflexivity. Qed.
-
-Lemma arity_neglookahead : forall r, arity (NegLookAhead r) = 1.
-Proof. reflexivity. Qed.
-
-Lemma arity_neglookbehind : forall r, arity (NegLookBehind r) = 1.
-Proof. reflexivity. Qed.
-
-Lemma arity_concat : forall r1 r2, arity (Concat r1 r2) = arity r1 + arity r2.
-Proof.
-  intros. unfold arity. simpl.
-  rewrite app_length. auto.
-Qed.
-
-Lemma arity_union : forall r1 r2, arity (Union r1 r2) = arity r1 + arity r2.
-Proof.
-  intros. unfold arity. simpl.
-  rewrite app_length. auto.
-Qed.
-
-Lemma arity_star : forall r, arity (Star r) = arity r.
-Proof. reflexivity. Qed.
-
-Hint Rewrite arity_eps arity_char arity_lookahead arity_lookbehind
-  arity_neglookahead arity_neglookbehind arity_concat arity_union
-  arity_star : regex.
-
-Fixpoint total_arity (r : @LRegex A) : nat :=
-  match r with
-  | Epsilon => 0
-  | CharClass c => 0
-  | Concat r1 r2 => total_arity r1 + total_arity r2
-  | Union r1 r2 => total_arity r1 + total_arity r2
-  | Star r => total_arity r
-  | LookAhead r => 1 + total_arity r
-  | LookBehind r => 1 + total_arity r
-  | NegLookAhead r => 1 + total_arity r
-  | NegLookBehind r => 1 + total_arity r
-  end.
-
-Lemma arity_total_arity : forall r,
-  arity r <= total_arity r.
-Proof.
-  induction r; autorewrite with regex; simpl; lia.
-Qed.
-
 Definition tape := list bool.
 
 Fixpoint abstractAux (i : nat) (r : @LRegex A) : ORegex :=
@@ -150,6 +94,64 @@ Definition is_lookaround_tape (r : LARegex) (w : list A) (t : list bool) : Prop 
   | LANegLookAhead r1 => is_lookahead_tape r1 w t
   | LANegLookBehind r1 => is_lookbehind_tape r1 w t
   end.
+
+Definition oval_tapes_aux (e : @LRegex A) (w : list A) (s : nat) (ts : list tape) : Prop :=
+  length ts >= s + arity e
+  /\ (forall t, In t ts -> length t = length w + 1)
+  /\ forall i t r,
+    i < arity e
+    -> nth_error ts (s + i) = Some t
+    -> nth_error (maximal_lookarounds e) i = Some r
+    -> is_lookaround_tape r w t.
+
+
+Definition oval_tapes (e : @LRegex A) (w : list A) (ts : list tape) : Prop :=
+    oval_tapes_aux e w 0 ts.
+
+Definition is_oval_aux (r : @LRegex A) (w : list A) (s : nat) (vs : list valuation) : Prop :=
+  exists ts, oval_tapes_aux r w s ts /\ vs = transpose (length w + 1) ts.
+
+Definition is_oval (r : @LRegex A) (w : list A) (vs : list valuation) : Prop :=
+  is_oval_aux r w 0 vs.
+
+Lemma arity_eps : arity Epsilon = 0.
+Proof. reflexivity. Qed.
+
+Lemma arity_char : forall c, arity (CharClass c) = 0.
+Proof. reflexivity. Qed.
+
+Lemma arity_lookahead : forall r, arity (LookAhead r) = 1.
+Proof. reflexivity. Qed.
+
+Lemma arity_lookbehind : forall r, arity (LookBehind r) = 1.
+Proof. reflexivity. Qed.
+
+Lemma arity_neglookahead : forall r, arity (NegLookAhead r) = 1.
+Proof. reflexivity. Qed.
+
+Lemma arity_neglookbehind : forall r, arity (NegLookBehind r) = 1.
+Proof. reflexivity. Qed.
+
+Lemma arity_concat : forall r1 r2, arity (Concat r1 r2) = arity r1 + arity r2.
+Proof.
+  intros. unfold arity. simpl.
+  rewrite app_length. auto.
+Qed.
+
+Lemma arity_union : forall r1 r2, arity (Union r1 r2) = arity r1 + arity r2.
+Proof.
+  intros. unfold arity. simpl.
+  rewrite app_length. auto.
+Qed.
+
+Lemma arity_star : forall r, arity (Star r) = arity r.
+Proof. reflexivity. Qed.
+
+Hint Rewrite arity_eps arity_char arity_lookahead arity_lookbehind
+  arity_neglookahead arity_neglookbehind arity_concat arity_union
+  arity_star : regex.
+
+
 
 Lemma lookaround_tape_length : forall r w t,
   is_lookaround_tape r w t -> length t = length w + 1.
@@ -218,14 +220,6 @@ Proof.
       tauto. lia. 
 Qed.
 
-Definition oval_tapes_aux (e : @LRegex A) (w : list A) (s : nat) (ts : list tape) : Prop :=
-  length ts >= s + arity e
-  /\ (forall t, In t ts -> length t = length w + 1)
-  /\ forall i t r,
-    i < arity e
-    -> nth_error ts (s + i) = Some t
-    -> nth_error (maximal_lookarounds e) i = Some r
-    -> is_lookaround_tape r w t.
 
 Lemma oval_tapes_aux_firstn (e : @LRegex A) (w : list A) (s : nat) (ts : list tape) :
   oval_tapes_aux e w s ts
@@ -504,14 +498,7 @@ Proof.
 Qed.
 
    
-Definition oval_tapes (e : @LRegex A) (w : list A) (ts : list tape) : Prop :=
-    oval_tapes_aux e w 0 ts.
 
-Definition is_oval_aux (r : @LRegex A) (w : list A) (s : nat) (vs : list valuation) : Prop :=
-  exists ts, oval_tapes_aux r w s ts /\ vs = transpose (length w + 1) ts.
-
-Definition is_oval (r : @LRegex A) (w : list A) (vs : list valuation) : Prop :=
-  is_oval_aux r w 0 vs.
 
 Lemma wf_oval (r : @LRegex A) (w : list A) (vs : list valuation) :
   forall s, 
