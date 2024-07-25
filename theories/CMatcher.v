@@ -1,3 +1,21 @@
+(**
+
+In the file [OMatcher.v], an algorithm for matching Oracle Regular Expressions [ORegex] in Oracle Strings [ostring] is formalized. In this file, we formalize some optimizations on that algorithm. The C in [CMatcher.v] stands for Caching. The main optimization is that we cache the results of the functions [finalWith] and [nullableWith], so that computing them is done in tandem with building the value itself and they can be looked up later in costant time.
+
+1. The main type used in this file is [CMRegex]. It is defined in a mutually inductive manner with the type [CMRe]. 
+  - The type [CMRegex] is a wrapper around [CMRe] and contains two boolean fields. These fields can be accessed using the functions [cRe], [cNullable] and [cFinal] which are defined for convenience.
+  - The function [unCache] converts a [CMRegex] to a [MRegex] by removing the caching information.
+  - The relation [synced : valuation -> CMRegex -> Prop] asserts that the [CMRegex] is synchronized with respect to the given valuation. This happens when the fields [cNullable] and [cFinal] contain the correct values. This is established in the lemmas [synced_unCache_nullableWith] and [synced_unCache_finalWith].
+2. The functions [mkEpsilon], [mkCharClass], [mkQueryPos], [mkQueryNeg], [mkConcat], [mkUnion] and [mkStar] behave like 'smart constructors'. This is to say that they set the fields [cNullable] and [cFinal] correctly based on the input [CMRegex]es.
+  - The correctness of these 'smart constructors' are established in [synced_mkEpsilon], [synced_mkCharClass], [synced_mkQueryPos], [synced_mkQueryNeg], [synced_mkConcat], [synced_mkUnion] and [synced_mkStar].
+  - The function [syncVal] is used to synchronize a [CMRegex] with respect to a given valuation. The correctness of this function is established in [synced_syncVal].
+3. The functions [cRead], [cFollow] and [toCMarked] are counterparts of the functions [read], [followWith] and [toMarked] respectively. The correctness of these functions are established in [cRead_unCache], [synced_unCache_followWith] and [toCMarked_unCache].
+4. The function [cConsume] is the counterpart of the function [consume]. The correctness of this function is established in [cConsume_empty], [cConsume_singleton] and [cConsume_step].
+  - The function [cScanMatch : ORegex -> ostring -> list bool] is the counterpart of the function [oscanMatcher]. The correctness of this function is established in [cScanMatch_tape].
+
+
+*)
+
 Require Import Lia.
 Require Import Coq.Arith.Wf_nat.
 Require Import Coq.Lists.List.

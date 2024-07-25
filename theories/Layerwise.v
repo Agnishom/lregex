@@ -1,15 +1,18 @@
 (**
 
 This file contains the main layerwise algorithm for lookahead regex matching.
-  1. We will assume that we have a function [scanMatchONFA : @ORegex A -> @ostring A -> tape] that is satisfies [is_oscanMatcher].
-     This means that it correctly acts as a matcher for elements of [ORegex].
-  2. This file contains [absEvalAux]. This function takes a [scanMatchONFA] function, a word [w], a word [wrev] (the reverse of [w]), a length [len] (the length of the word + 1), a regex [r], an index [i], and a list of tapes [ts].
+
+1. This file contains [absEvalAux]. This function takes a [scanMatchONFA] function, a word [w], a word [wrev] (the reverse of [w]), a length [len] (the length of the word + 1), a regex [r], an index [i], and a list of tapes [ts].
      - It returns an [ORegex], a number, and a list of tapes.
      - The [ORegex] is [abstract r]
      - The number denotes the number of queries used in [abstract r]
      - The list of tapes correspond to the valuations of the maximal lookarounds of [r].
-  3. Finally, the function [scanMatch] feeds in these valuations to [scanMatchONFA] and returns a tape that is a match for [r] on [w].
-  4. The main correctness theorem is [scanMatch_correct].
+2. In the file [CMatcher.v], we have defined a function [cScanMatch : @ORegex A -> @ostring A -> tape] that satisfies [is_oscanMatcher].
+  - This means that it correctly acts as a matcher for elements of [ORegex].
+3. The function [scanMatch] uses [absEvalAux] to get the valuations of the maximal lookarounds of [r] and then feeds them to [cScanMatch] to get a tape for [r] on [w].
+  - A similar thing is done by [scanMatchSlice] which produces a tape for a slice of [w].
+  - The correctness of these two functions are proven in [scanMatch_correct] and [scanMatchSlice_correct].
+4. The function [llmatch] finds the longest of the leftmost matches of [r] on [w]. The correctness of this function is proven in [llmatch_correct].
 
 *)
 

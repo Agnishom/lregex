@@ -91,6 +91,9 @@ Inductive match_oregex : ORegex -> ostring -> Prop :=
 Definition oWildCard : ORegex :=
   OStar (OCharClass (fun _ => true)).
 
+Definition empty_oreg : ORegex :=
+  OCharClass (fun _ => false).
+
 Definition rPass (or : ORegex) : ORegex :=
   OConcat oWildCard or.
 
@@ -735,6 +738,15 @@ Proof.
     + assumption.
     + apply oWildCard_match. apply ofirstn_outer_length_wf. assumption.
     + assumption.
+Qed.
+
+Lemma omatch_empty_oreg_never :
+    forall (os : ostring),
+        ~ match_oregex empty_oreg os.
+Proof.
+    intros ? H.
+    inversion H; subst.
+    discriminate.
 Qed.
 
 End OString.

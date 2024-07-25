@@ -9,8 +9,7 @@ WORKDIR /workspace
 
 COPY . .
 
-RUN eval $(opam env) && \
-    cd theories && \
+RUN cd theories && \
     make && \
     cd ../haskell && \
     cabal build && \

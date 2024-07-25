@@ -1,3 +1,24 @@
+(**
+
+In the file [ORegex.v], Oracle Regular Expressions [ORegex] and Oracle Strings [ostring] are defined. This file formalizes the notion of marked regular expressions [MRegex], which can be used to match such regular expressions.
+
+1. The type [MRegex] is similar to an [ORegex], except that it allows character-classes to be marked. These marks corresponds to active tokens in the corresponding NFA.
+  - The semantics of [MRegex] is defined by the inductive predicate [match_mregex : MRegex -> ostring -> Prop]. This corresponds to the set of ostrings that would be accepted in the corresponding NFA by runs that start from the marked states.
+2. [MRegex] and [ORegex] are related in the following way.
+  - The function [strip : MRegex -> ORegex] removes all the marks.
+  - The function [toMarked : ORegex -> MRegex] initializes every character-class as unmarked.
+  - The semantics of [MRegex] can also be understood using [markedLang : MRegex -> ORegex]. The lemma [mmatch_markedLang_iff] shows the equivalence between these two semantics.
+3. The following functions are used to manipulate the marks in a given [MRegex].
+  - [initMarkWith : valuation -> MRegex -> MRegex] marks the initial states. The lemmas [initMarkWith_superset], [stripLang_in_initMarkWith] and [initMarkWith_bw] are the relevant semantic properties of this function.
+  - [shiftWith : valuation -> MRegex -> MRegex] shifts the marks to the next states (if the valuations pass the guards). The lemmas [shiftWith_fw] and [shiftWith_bw] characterize this function.
+  - [followWith : bool -> valuation -> MRegex -> MRegex] combines [initMarkWith] and [shiftWith]. The lemmas [followWith_false] and [followWith_true] show that they are equivalent to [shiftWith] and [initMarkWith] respectively.
+  - [read : A -> MRegex -> MRegex] removes the marks from the predicates which do not match the given character. The lemmas [read_fw], [read_bw] and [read_subset] characterize this function.
+  - [finalWith : valuation -> MRegex -> bool] checks if there are tokens present on the final states. The lemma [finalWith_iff] characterizes this function.
+  - [nullableWith : valuation -> MRegex -> bool] checks if the language [strip mr] accepts the string [([], [v])] (where [v] is the given valuation). See the lemma [nullableWith_iff].
+4. The function [consume : ORegex -> ostring -> MRegex] produces the [MRegex] whose marks corresponds to the active states of the NFA that would have been obtained by running the NFA corresponding to the given [ORegex] on the given ostring. See the lemmas [consume_fw] and [consume_bw].
+  - The tape is produced by the function [oscanMatcher : ORegex -> ostring -> list bool]. This is proven in the lemma [oscanMatcher_tape].
+
+*)
 Require Import Lia.
 Require Import Coq.Arith.Wf_nat.
 Require Import Coq.Lists.List.
@@ -24,26 +45,26 @@ Inductive MRegex : Type :=
 .
 
 Fixpoint strip (r : MRegex) : ORegex :=
-    match r with
-    | MEpsilon => OEpsilon
-    | MCharClass _ f => OCharClass f
-    | MQueryPos n => OQueryPos n
-    | MQueryNeg n => OQueryNeg n
-    | MConcat r1 r2 => OConcat (strip r1) (strip r2)
-    | MUnion r1 r2 => OUnion (strip r1) (strip r2)
-    | MStar r => OStar (strip r)
-    end.
+  match r with
+  | MEpsilon => OEpsilon
+  | MCharClass _ f => OCharClass f
+  | MQueryPos n => OQueryPos n
+  | MQueryNeg n => OQueryNeg n
+  | MConcat r1 r2 => OConcat (strip r1) (strip r2)
+  | MUnion r1 r2 => OUnion (strip r1) (strip r2)
+  | MStar r => OStar (strip r)
+  end.
 
 Fixpoint is_marked (r : MRegex) : bool :=
-    match r with
-    | MEpsilon => false
-    | MCharClass b f => b
-    | MQueryPos _ => false
-    | MQueryNeg _ => false
-    | MConcat r1 r2 => is_marked r1 || is_marked r2
-    | MUnion r1 r2 => is_marked r1 || is_marked r2
-    | MStar r => is_marked r
-    end.
+  match r with
+  | MEpsilon => false
+  | MCharClass b f => b
+  | MQueryPos _ => false
+  | MQueryNeg _ => false
+  | MConcat r1 r2 => is_marked r1 || is_marked r2
+  | MUnion r1 r2 => is_marked r1 || is_marked r2
+  | MStar r => is_marked r
+  end.
 
 Inductive match_mregex : MRegex -> ostring -> Prop :=
 | mmatch_charclass :
@@ -69,9 +90,6 @@ Inductive match_mregex : MRegex -> ostring -> Prop :=
      -> match_oregex (OStar (strip mr)) (oskipn n os) 
      -> match_mregex (MStar mr) os
 .
-
-Definition empty_oreg : ORegex :=
-    @OCharClass A (fun _ => false).
 
 Fixpoint markedLang (mr : MRegex) : ORegex :=
   match mr with 
@@ -373,17 +391,6 @@ Proof.
 Qed.
 
 
-
-Lemma omatch_empty_oreg_never :
-    forall (os : ostring),
-        ~ match_oregex empty_oreg os.
-Proof.
-    intros ? H.
-    inversion H; subst.
-    discriminate.
-Qed.
-
-
 Lemma mmatch_markedLang_iff :
     forall (mr : MRegex) (os : ostring),
     outer_length_wf os ->
@@ -391,20 +398,20 @@ Lemma mmatch_markedLang_iff :
 Proof.
    induction mr; simpl.
    - pose proof mmatch_eps_never. 
-     pose proof omatch_empty_oreg_never. 
+     pose proof (@omatch_empty_oreg_never A). 
      firstorder.
    - destruct b; simpl.
      + setoid_rewrite mmatch_marked_iff.
        setoid_rewrite omatch_charclass_iff.
        tauto.
      + pose proof mmatch_unmarked_never.
-       pose proof omatch_empty_oreg_never.
+       pose proof (@omatch_empty_oreg_never A).
        firstorder.
     - pose proof mmatch_querypos_never.
-      pose proof omatch_empty_oreg_never.
+      pose proof (@omatch_empty_oreg_never A).
       firstorder.
     - pose proof mmatch_queryneg_never.
-      pose proof omatch_empty_oreg_never.
+      pose proof (@omatch_empty_oreg_never A).
       firstorder.
     - intros.
       setoid_rewrite mmatch_concat_iff.
