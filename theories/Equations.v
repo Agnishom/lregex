@@ -926,7 +926,42 @@ Proof.
         apply H; apply Hr.
 Defined.
 
-Hint Resolve union_proper concat_proper star_proper : regex.
+Instance lookahead_proper : Proper (regex_eq ==> regex_eq) LookAhead.
+Proof.
+    unfold regex_eq.
+    intros r s H w start delta.
+    rewrite !match_lookahead_iff.
+    now rewrite H.
+Defined.
+
+Instance neglookahead_proper : Proper (regex_eq ==> regex_eq) NegLookAhead.
+Proof.
+    unfold regex_eq.
+    intros r s H w start delta.
+    rewrite !match_neglookahead_iff, <- !match_not_match.
+    now rewrite H.
+Defined.
+
+Instance lookbehind_proper : Proper (regex_eq ==> regex_eq) LookBehind.
+Proof.
+    unfold regex_eq.
+    intros r s H w start delta.
+    rewrite !match_lookbehind_iff.
+    now rewrite H.
+Defined.
+
+Instance neglookbehind_proper : Proper (regex_eq ==> regex_eq) NegLookBehind.
+Proof.
+    unfold regex_eq.
+    intros r s H w start delta.
+    rewrite !match_neglookbehind_iff, <- !match_not_match.
+    now rewrite H.
+Defined.
+
+
+Hint Resolve union_proper concat_proper star_proper 
+  lookahead_proper neglookahead_proper lookbehind_proper neglookbehind_proper
+    : regex.
 
 Instance regex_leq_trans : Transitive regex_leq.
 Proof.
