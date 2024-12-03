@@ -1,3 +1,16 @@
+Verified and Efficient Matching of Regular Expressions with Lookaround
+===
+
+This repository contains the Coq formalization accompanying the paper "Verified and Efficient Matching of Regular Expressions with Lookaround" by Agnishom Chattopadhyay, Angela W. Li and Konstantinos Mamouras, to be presented at CPP 2025.
+
+> **Abstract**
+>
+> Regular expressions can be extended with lookarounds for contextual matching. This paper discusses a Coq formalization of the theory of regular expressions with lookarounds. We provide an efficient and purely functional algorithm for matching expressions with lookarounds and verify its correctness. The algorithm runs in time linear in both the size of the regular expression as well as the input string. Our experimental results provide empirical support to our complexity analysis. To the best of our knowledge, this is the first formalization of a linear-time matching algorithm for regular expressions with lookarounds.
+
+This builds upon [prior work](https://dl.acm.org/doi/10.1145/3632934) published in POPL 2024.
+
+A preliminary version of the contents of this paper is available in Chapter 3 of the [author's thesis](https://agnishom.github.io/assets/pdf/thesis-24-08-08.pdf).
+
 # Checking Proofs
 
 To check the proofs, you need Coq 8.19. Once you have Coq installed, you can run `make` from the `theories/` directory. This will run the proof scripts, and extract the code to `haskell/src/Extracted.hs`.
